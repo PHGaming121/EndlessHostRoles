@@ -25,9 +25,8 @@ public static class ServerDropdownPatch
         background.size = new Vector2(4, 1);
         ServerManager serverManager = ServerManager.Instance;
         TranslationController translationController = TranslationController.Instance;
-        var regions = serverManager.AvailableRegions.ToList();
         IRegionInfo currentRegion = serverManager.CurrentRegion;
-        var displayRegions = regions.Where(region => region.Name != currentRegion.Name).ToList();
+        var displayRegions = serverManager.AvailableRegions.Where(region => region.Name != currentRegion.Name).ToList();
         int totalColumns = Mathf.Max(1, Mathf.CeilToInt(displayRegions.Count / 5f));
         int rowLimit = Mathf.Min(displayRegions.Count, 5);
         __instance.defaultButtonSelected = __instance.firstOption;

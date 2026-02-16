@@ -248,8 +248,25 @@ internal static class CustomHnS
             byte agent = result.GetKeyByValue(CustomRoles.Agent).PlayerId;
             PlayerRoles.DoIf(x => x.Value.Role != CustomRoles.Agent && x.Value.Interface.Team == Team.Impostor, x => TargetArrow.Add(x.Key, agent));
         }
-
-        SendRPC();
+        
+        if (!Utils.DoRPC) return;
+        
+        MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.HNSSync, SendOption.Reliable);
+        writer.WritePacked(1);
+        writer.WritePacked(TimeLeft);
+        writer.WritePacked(Danger.Count);
+        foreach (var kv in Danger)
+        {
+            writer.Write(kv.Key);
+            writer.WritePacked(kv.Value);
+        }
+        writer.WritePacked(PlayerRoles.Count);
+        foreach (var kv in PlayerRoles)
+        {
+            writer.Write(kv.Key);
+            writer.WritePacked((int)kv.Value.Role);
+        }
+        AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 
     public static void ApplyGameOptions(IGameOptions opt, PlayerControl pc)
@@ -386,51 +403,55 @@ internal static class CustomHnS
         return $"<size=90%>{Utils.ColorString(Utils.GetRoleColor(seer.GetCustomRole()), seer.GetRoleInfo())}</size>";
     }
 
-    public static void SendRPC()
-    {
-        MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.HNSSync, SendOption.Reliable);
-        writer.Write(TimeLeft);
-        writer.Write(Danger.Count);
-        foreach (var kv in Danger)
-        {
-            writer.Write(kv.Key);
-            writer.Write(kv.Value);
-        }
-        writer.Write(PlayerRoles.Count);
-        foreach (var kv in PlayerRoles)
-        {
-            writer.Write(kv.Key);
-            writer.Write((int)kv.Value.Role);
-        }
-        AmongUsClient.Instance.FinishRpcImmediately(writer);
-    }
-
     public static void ReceiveRPC(MessageReader reader)
     {
-        TimeLeft = reader.ReadInt32();
-
-        int dangerCount = reader.ReadInt32();
-        Danger.Clear();
-        for (int i = 0; i < dangerCount; i++)
+        switch (reader.ReadPackedInt32())
         {
-            byte id = reader.ReadByte();
-            int danger = reader.ReadInt32();
-            Danger[id] = danger;
+            case 1:
+            {
+                TimeLeft = reader.ReadPackedInt32();
+        
+                int dangerCount = reader.ReadPackedInt32();
+                Danger.Clear();
+                
+                for (int i = 0; i < dangerCount; i++)
+                {
+                    byte id = reader.ReadByte();
+                    int danger = reader.ReadPackedInt32();
+                    Danger[id] = danger;
+                }
+        
+                int roleCount = reader.ReadPackedInt32();
+                PlayerRoles.Clear();
+                
+                for (int i = 0; i < roleCount; i++)
+                {
+                    byte id = reader.ReadByte();
+                    CustomRoles role = (CustomRoles)reader.ReadPackedInt32();
+        
+                    var roleInterface = role == CustomRoles.GM ? new Hider() : (IHideAndSeekRole)Activator.CreateInstance(Main.AllTypes.First(t => t.Name == role.ToString()));
+                    PlayerRoles[id] = (roleInterface, role);
+                }
+
+                break;
+            }
+            case 2:
+            {
+                PlayerRoles.Remove(reader.ReadByte());
+                break;
+            }
+            case 3:
+            {
+                TimeLeft = reader.ReadPackedInt32();
+                
+                Danger.Clear();
+
+                while (reader.BytesRemaining > 0)
+                    Danger[reader.ReadByte()] = reader.ReadPackedInt32();
+
+                break;
+            }
         }
-
-        int roleCount = reader.ReadInt32();
-        PlayerRoles.Clear();
-        for (int i = 0; i < roleCount; i++)
-        {
-            byte id = reader.ReadByte();
-            CustomRoles role = (CustomRoles)reader.ReadInt32();
-
-            var roleInterface = role == CustomRoles.GM ? new Hider() : (IHideAndSeekRole)Activator.CreateInstance(Main.AllTypes.First(t => t.Name == role.ToString()));
-            PlayerRoles[id] = (roleInterface, role);
-        }
-
-        Main.HasJustStarted = false;
-        Utils.MarkEveryoneDirtySettingsV4();
     }
 
     public static bool CheckForGameEnd(out GameOverReason reason)
@@ -535,7 +556,10 @@ internal static class CustomHnS
                 }
 
                 foreach (var id in toRemove)
+                {
                     PlayerRoles.Remove(id);
+                    Utils.SendRPC(CustomRPC.HNSSync, 2, id);
+                }
             }
             catch { }
 
@@ -564,6 +588,15 @@ internal static class CustomHnS
                 }
 
                 Danger = new Dictionary<byte, int>(NonImpostors.Count);
+
+                bool doRPC = Utils.DoRPC;
+                MessageWriter writer = !doRPC ? null : AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.HNSSync, SendOption.Reliable);
+                
+                if (doRPC)
+                {
+                    writer.WritePacked(3);
+                    writer.WritePacked(TimeLeft);
+                }
 
                 // Precomputed squared thresholds ( (3n+2)^2 )
                 const float d0 = 2f * 2f;   // 4
@@ -596,15 +629,20 @@ internal static class CustomHnS
                         minSq <= d4 ? 4 : 5;
 
                     Danger[nonImpId] = danger;
-                }
 
+                    if (doRPC)
+                    {
+                        writer.Write(nonImpId);
+                        writer.WritePacked(danger);
+                    }
+                }
+                
+                if (doRPC) AmongUsClient.Instance.FinishRpcImmediately(writer);
             }
             catch { }
 
             if (DangerMeter.GetBool() || (TimeLeft + 1) % 60 == 0 || TimeLeft <= 60)
                 Utils.NotifyRoles();
-
-            SendRPC();
         }
     }
 }
