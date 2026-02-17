@@ -192,15 +192,9 @@ public static class BanManager
             Logger.Info($"{player.PlayerName} was in temp ban list", "BAN");
         }
 
-        if (GameStates.CurrentServerType is GameStates.ServerType.Local) return;
-
-        if (GameStates.CurrentServerType is not GameStates.ServerType.Vanilla)
-        {
-            if (player.ProductUserId.IsNullOrWhiteSpace() || player.ProductUserId.Length != 32)
-            {
-                return;
-            }
-        }
+        var server = GameStates.CurrentServerType;
+        if (server == GameStates.ServerType.Local) return;
+        if (server != GameStates.ServerType.Vanilla && (player.ProductUserId.IsNullOrWhiteSpace() || player.ProductUserId.Length != 32)) return;
 
         string friendcode = player.FriendCode.Replace(':', '#');
 
