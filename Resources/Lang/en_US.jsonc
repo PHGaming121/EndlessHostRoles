@@ -2263,7 +2263,7 @@
   "VindicatorInfoLong": "(Impostors):\\nAs the Vindicator, you have extra votes like a Mayor.",
   "ViperEHR": "Viper",
   "ViperEHRInfo": "Kill to Dissolve Bodies",
-  "ViperEHRInfoLong": "(Impostors):\\nAs the Viper, the bodies you leave behind slowly dissolve due to your acid, causing them to disappear and become unreportable.\n\n<color=#ff0000><size=75%>Currently, roles such as Sheriff may still be able to see dissolved bodies from their POV due to desync.</color>"</size></color>",
+  "ViperEHRInfoLong": "(Impostors):\\nAs the Viper, the bodies you leave behind slowly dissolve due to your acid, causing them to disappear and become unreportable.\n\n<color=#ff0000><size=75%>Currently, roles such as Sheriff may still be able to see dissolved bodies from their POV due to desync.</size></color>",
   "Visionary": "Visionary",
   "VisionaryInfo": "You see the alignments of the living",
   "VisionaryInfoLong": "(Impostors):\\nAs the Visionary, you see the teams of players you revealed. You can reveal a player's alignment by selecting them as your shapeshifting target; if you have at least one ability, use left. You gain one ability to use after each kill you make.\\nThe name color of a revealed player will indicate their team (<#8cffff>Crewmate</color>/<#ff1919>Impostor</color>/<#ffab1b>Neutral</color>/<#7b3fbb>Coven</color>).",
