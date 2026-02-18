@@ -43,29 +43,28 @@ public class Counter(int totalGreenTime, int totalRedTime, char symbol, bool isR
 
     public void Update()
     {
-        if (Timer <= 0)
-        {
-            switch (IsRed, IsYellow)
-            {
-                // Change from green to yellow
-                case (IsRed: false, IsYellow: false):
-                    IsYellow = true;
-                    break;
-                // Change from red to green
-                case (IsRed: true, IsYellow: false):
-                    TotalGreenTime = RandomGreenTime(Symbol);
-                    IsRed = false;
-                    break;
-                // Change from yellow to red
-                case (IsRed: false, IsYellow: true):
-                    TotalRedTime = RandomRedTime(Symbol);
-                    IsYellow = false;
-                    IsRed = true;
-                    break;
-            }
+        if (!Stopwatch.IsRunning || Timer > 0) return;
 
-            Stopwatch.Restart();
+        switch (IsRed, IsYellow)
+        {
+            // Change from green to yellow
+            case (IsRed: false, IsYellow: false):
+                IsYellow = true;
+                break;
+            // Change from red to green
+            case (IsRed: true, IsYellow: false):
+                TotalGreenTime = RandomGreenTime(Symbol);
+                IsRed = false;
+                break;
+            // Change from yellow to red
+            case (IsRed: false, IsYellow: true):
+                TotalRedTime = RandomRedTime(Symbol);
+                IsYellow = false;
+                IsRed = true;
+                break;
         }
+
+        Stopwatch.Restart();
     }
 }
 
@@ -561,8 +560,6 @@ internal static class StopAndGo
                 }
 
                 End:
-                
-                if (IsEventActive && Event.Type == Events.FrozenTimers) return;
 
                 data.UpdateCounters();
             }
