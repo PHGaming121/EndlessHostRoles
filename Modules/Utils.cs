@@ -3991,11 +3991,15 @@ public static class Utils
             Reaper.OnAnyoneDead(target);
             Wyrd.OnAnyoneDeath(target);
             Thanos.OnDeath(targetRealKiller, target, disconnect);
-            CovenMember.OnAnyoneDead();
-            Altruist.OnAnyoneDead();
-            Occultist.OnAnyoneDead();
-            Vulture.OnAnyoneDead();
-            Jackal.OnAnyoneDead();
+            
+            LateTask.New(() =>
+            {
+                CovenMember.OnAnyoneDead();
+                Altruist.OnAnyoneDead();
+                Occultist.OnAnyoneDead();
+                Vulture.OnAnyoneDead();
+                Jackal.OnAnyoneDead();
+            }, 0.1f);
 
             if (!onMeeting && !disconnect)
             {
@@ -4017,7 +4021,7 @@ public static class Utils
                 Amogus.OnAnyoneDead(target);
                 Adventurer.OnAnyoneDead(target);
                 Whisperer.OnAnyoneDied(target);
-                Necromancer.OnAnyoneDead();
+                LateTask.New(Necromancer.OnAnyoneDead, 0.1f);
             }
 
             if (QuizMaster.On) QuizMaster.Data.NumPlayersDeadThisRound++;
