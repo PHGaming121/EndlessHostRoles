@@ -96,7 +96,7 @@ namespace EHR
 
             try
             {
-                if (playerControl != null)
+                if (playerControl)
                 {
                     MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
                     writer.StartMessage(5);
@@ -431,6 +431,11 @@ namespace EHR
                 try { Despawn(); }
                 finally { Gone = true; }
             }
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
         }
     }
 

@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 
 namespace EHR.Roles;
 
@@ -24,10 +23,7 @@ public class Sonar : IAddon
     {
         if (!seer.Is(CustomRoles.Sonar) || !GameStates.IsInTask || seer.inVent) return;
         
-        var aapc = Main.AllAlivePlayerControls;
-        if (aapc.Count == 1) return;
-
-        PlayerControl closest = aapc.Where(x => x.PlayerId != seer.PlayerId).MinBy(x => Vector2.Distance(seer.Pos(), x.Pos()));
+        if (!FastVector2.TryGetClosestPlayerTo(seer, out PlayerControl closest)) return;
 
         if (Target.TryGetValue(seer.PlayerId, out byte targetId))
         {

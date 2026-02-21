@@ -7,7 +7,7 @@ namespace EHR;
 
 public abstract class OptionItem
 {
-    public const int NumPresets = 10;
+    public const int NumPresets = 20;
     public const int PresetId = 0;
     public readonly List<OptionItem> Children;
 
@@ -232,11 +232,15 @@ public abstract class OptionItem
 
     public bool IsCurrentlyHidden()
     {
-        for (OptionItem current = this; current != null; current = current.Parent)
+        try
         {
-            if (Hidden(current))
-                return true;
+            for (OptionItem current = this; current != null; current = current.Parent)
+            {
+                if (Hidden(current))
+                    return true;
+            }
         }
+        catch (Exception e) { Utils.ThrowException(e); }
 
         return false;
 
@@ -380,3 +384,4 @@ public enum OptionFormat
     Health,
     Level
 }
+

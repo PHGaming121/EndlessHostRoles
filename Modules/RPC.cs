@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using AmongUs.GameOptions;
 using EHR.Gamemodes;
@@ -84,15 +85,14 @@ public enum CustomRPC
     SetLibrarianMode,
     SyncYinYanger,
     DruidAddTrigger,
-    SyncBenefactorMarkedTask,
     SyncMafiosoData,
     SyncMafiosoPistolCD,
     SyncDamoclesTimer,
     SyncChronomancer,
+    PenguinSync,
 
     Sicko = 164,
 
-    PenguinSync,
     SyncInfection,
     SetAlchemistPotion,
     SetRicochetTarget,
@@ -121,21 +121,22 @@ public enum CustomRPC
     SetJailorTarget,
     SetDoppelgangerStealLimit,
     SetJailorExeLimit,
-    SetWwTimer,
     SetSwapperVotes,
     Judge,
     Guess,
     MeetingKill,
     NemesisRevenge,
-    SetSwooperTimer,
     SetBanditStealLimit,
-    SetBkTimer,
     SyncFollowerTargetAndTimes,
     SyncRomanticTarget,
     SyncVengefulRomanticTarget,
     SetRevealedPlayer,
     SetCurrentRevealTarget,
     RpcPassBomb,
+    SyncPostman,
+    SyncChangeling,
+    SyncSentry,
+    SyncBargainer,
     SetDoomsayerProgress = 209,
 
     /*
@@ -148,11 +149,6 @@ public enum CustomRPC
      */
 
     SetTrackerTarget = 215,
-    SyncPostman,
-    SyncChangeling,
-    SyncTiger,
-    SyncSentry,
-    SyncBargainer,
     SyncOverheat,
     SyncIntrovert,
     SyncAllergic,
@@ -171,7 +167,7 @@ public enum CustomRPC
     FFAKill,
     FFASync,
     QuizSync,
-    SAGSync,
+    HNSSync,
     HotPotatoSync,
     SoloPVPSync,
     CTFSync,
@@ -183,7 +179,7 @@ public enum CustomRPC
     DeathraceSync
 
     // The total number of RPCs must not exceed 255
-    // Because HandleRpc accepts Rpc in byte (max 255) system and it will be impossible to use int
+    // Because HandleRpc accepts Rpc in byte (max 255) system, and it will be impossible to use int
 }
 
 public enum Sounds
@@ -472,8 +468,8 @@ internal static class RPCHandlerPatch
 
                         try
                         {
-                            if (option.Id == OptionItem.PresetId && option.CurrentValue != 9)
-                                option.SetValue(9, false, false);
+                            if (option.Id == OptionItem.PresetId && option.CurrentValue != 19)
+                                option.SetValue(19, false, false);
                         }
                         catch (Exception e) { Utils.ThrowException(e); }
                     }
@@ -684,13 +680,6 @@ internal static class RPCHandlerPatch
                     changeling.CurrentRole = (CustomRoles)reader.ReadPackedInt32();
                     break;
                 }
-                case CustomRPC.SyncTiger:
-                {
-                    if (Main.PlayerStates[reader.ReadByte()].Role is not Tiger tiger) break;
-
-                    tiger.EnrageTimer = reader.ReadSingle();
-                    break;
-                }
                 case CustomRPC.SyncSentry:
                 {
                     byte id = reader.ReadByte();
@@ -723,7 +712,7 @@ internal static class RPCHandlerPatch
                 {
                     byte bountyId = reader.ReadByte();
                     byte targetId = reader.ReadByte();
-                    (Main.PlayerStates[bountyId].Role as BountyHunter)?.ReceiveRPC(bountyId, targetId);
+                    (Main.PlayerStates[bountyId].Role as BountyHunter)?.ReceiveRPC(targetId);
                     break;
                 }
                 case CustomRPC.SyncBargainer:
@@ -1114,17 +1103,6 @@ internal static class RPCHandlerPatch
                     Nemesis.ReceiveRPC(reader, __instance);
                     break;
                 }
-                case CustomRPC.SetSwooperTimer:
-                {
-                    byte id = reader.ReadByte();
-                    (Main.PlayerStates[id].Role as Swooper)?.ReceiveRPC(reader);
-                    break;
-                }
-                case CustomRPC.SetBkTimer:
-                {
-                    Wildling.ReceiveRPC(reader);
-                    break;
-                }
                 case CustomRPC.SyncFollowerTargetAndTimes:
                 {
                     Follower.ReceiveRPC(reader);
@@ -1163,11 +1141,6 @@ internal static class RPCHandlerPatch
                     Doppelganger.ReceiveRPC(reader);
                     break;
                 }
-                case CustomRPC.SyncBenefactorMarkedTask:
-                {
-                    Benefactor.ReceiveRPC(reader);
-                    break;
-                }
                 case CustomRPC.SyncStressedTimer:
                 {
                     Stressed.ReceiveRPC(reader);
@@ -1192,12 +1165,6 @@ internal static class RPCHandlerPatch
                 case CustomRPC.SetJailorTarget:
                 {
                     Jailor.ReceiveRPC(reader);
-                    break;
-                }
-                case CustomRPC.SetWwTimer:
-                {
-                    byte id = reader.ReadByte();
-                    (Main.PlayerStates[id].Role as Werewolf)?.ReceiveRPC(reader);
                     break;
                 }
                 case CustomRPC.SetSwapperVotes:
@@ -1252,10 +1219,9 @@ internal static class RPCHandlerPatch
                     Quiz.AllowKills = reader.ReadBoolean();
                     break;
                 }
-                case CustomRPC.SAGSync:
+                case CustomRPC.HNSSync:
                 {
-                    int roundTime = reader.ReadPackedInt32();
-                    StopAndGo.RoundTime = roundTime;
+                    CustomHnS.ReceiveRPC(reader);
                     break;
                 }
                 case CustomRPC.HotPotatoSync:
@@ -1268,8 +1234,7 @@ internal static class RPCHandlerPatch
                     switch (reader.ReadPackedInt32())
                     {
                         case 1:
-                            int roundTime = reader.ReadPackedInt32();
-                            SoloPVP.RoundTime = roundTime;
+                            SoloPVP.RoundTimer = Stopwatch.StartNew();
                             break;
                         case 2:
                             SoloPVP.PlayerScore[reader.ReadByte()] = reader.ReadPackedInt32();
@@ -1731,5 +1696,4 @@ internal static class PlayerPhysicsRPCHandlerPatch
 
         return true;
     }
-
 }

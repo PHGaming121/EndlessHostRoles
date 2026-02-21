@@ -4,7 +4,6 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EHR.Roles;
 using Hazel;
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using InnerNet;
 using Mathf = UnityEngine.Mathf;
 using EHR.Gamemodes;
@@ -688,7 +687,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
     protected override bool AmValid()
     {
-        return base.AmValid() && player != null && player.Data != null && !player.Data.Disconnected && Main.RealOptionsData != null;
+        return base.AmValid() && player && player.Data && !player.Data.Disconnected && Main.RealOptionsData != null;
     }
 
 }

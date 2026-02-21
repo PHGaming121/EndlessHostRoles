@@ -119,32 +119,38 @@ public abstract class GameOptionsSender
 
     public static IEnumerator SendDirtyGameOptionsContinuously()
     {
-        while (GameStates.InGame || GameStates.IsLobby)
+        try
         {
-            for (var index = 0; index < AllSenders.Count; index++)
+            while (GameStates.InGame || GameStates.IsLobby)
             {
-                GameOptionsSender sender = AllSenders[index];
-
-                yield return WaitFrameIfNecessary();
-
-                if (sender == null || !sender.AmValid())
+                for (var index = 0; index < AllSenders.Count; index++)
                 {
-                    AllSenders.RemoveAt(index);
-                    index--;
-                    continue;
+                    yield return WaitFrameIfNecessary();
+                    
+                    if (index >= AllSenders.Count) break;
+                    GameOptionsSender sender = AllSenders[index];
+
+                    if (sender == null || !sender.AmValid())
+                    {
+                        AllSenders.RemoveAt(index);
+                        index--;
+                        continue;
+                    }
+
+                    if (sender.IsDirty)
+                        yield return sender.SendGameOptionsAsync();
+
+                    sender.IsDirty = false;
                 }
 
-                if (sender.IsDirty)
-                    yield return sender.SendGameOptionsAsync();
-
-                sender.IsDirty = false;
+                ForceWaitFrame = true;
+                yield return WaitFrameIfNecessary();
             }
-
-            ForceWaitFrame = true;
-            yield return WaitFrameIfNecessary();
         }
-
-        ActiveCoroutine = null;
+        finally
+        {
+            ActiveCoroutine = null;
+        }
     }
 
     protected static IEnumerator WaitFrameIfNecessary()
@@ -158,7 +164,7 @@ public abstract class GameOptionsSender
         }
     }
 
-    public static Coroutine ActiveCoroutine = null;
+    public static Coroutine ActiveCoroutine;
     private static readonly Stopwatch Stopwatch = new();
     private const int FrameBudget = 4; // in milliseconds
     protected static bool ForceWaitFrame;

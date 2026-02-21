@@ -306,6 +306,7 @@ internal static class ChangeRoleSettings
             Main.Invisible.Clear();
             ChatCommands.MutedPlayers.Clear();
             ExtendedPlayerControl.TempExiled.Clear();
+            Utils.CachedRoleSettings.Clear();
 
             MeetingTimeManager.Init();
             Main.DefaultCrewmateVision = Main.RealOptionsData.GetFloat(FloatOptionNames.CrewLightMod);
@@ -336,7 +337,7 @@ internal static class ChangeRoleSettings
                     string msg = GetString("Error.InvalidColor");
                     Logger.SendInGame(msg, Color.yellow);
                     msg += "\n" + string.Join(",", invalidColor);
-                    Utils.SendMessage(msg, sendOption: SendOption.None);
+                    Utils.SendMessage(msg, importance: MessageImportance.Low);
                     Logger.Error(msg, "CoStartGame");
                 }
             }
@@ -924,7 +925,7 @@ internal static class StartGameHostPatch
                 }
             }
 
-            if (!overrideLovers && CustomRoles.Lovers.IsEnable() && (CustomRoles.Hater.IsEnable() ? -1 : IRandom.Instance.Next(1, 100)) <= Lovers.LoverSpawnChances.GetInt()) AssignLoversRolesFromList();
+            if (!overrideLovers && CustomRoles.Lovers.IsEnable() && (RoleResult.ContainsValue(CustomRoles.Hater) ? -1 : IRandom.Instance.Next(1, 100)) <= Lovers.LoverSpawnChances.GetInt()) AssignLoversRolesFromList();
 
             // Add-on assignment
             var aapc = Main.EnumerateAlivePlayerControls().Shuffle();

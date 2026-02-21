@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using AmongUs.GameOptions;
@@ -1175,7 +1176,7 @@ internal static class IntroCutsceneDestroyPatch
                 case CustomGameMode.Quiz when Quiz.Chat:
                 case CustomGameMode.HideAndSeek when CustomHnS.Chat:
                 case CustomGameMode.NaturalDisasters when NaturalDisasters.Chat:
-                    Utils.SetChatVisibleForAll();
+                    LateTask.New(Utils.SetChatVisibleForAll, 4f);
                     break;
             }
 
@@ -1204,11 +1205,11 @@ internal static class IntroCutsceneDestroyPatch
 
                 StartGameHostPatch.RpcSetRoleReplacer.SetActualSelfRolesAfterOverride();
                 
-                var doubleAgents = Main.EnumerateAlivePlayerControls().Where(x => x.Is(CustomRoles.DoubleAgent)).ToList();
+                var doubleAgents = aapc.Where(x => x.Is(CustomRoles.DoubleAgent)).ToList();
 
                 if (doubleAgents.Count > 0)
                 {
-                    Main.EnumerateAlivePlayerControls().DoIf(x => x.Is(Team.Impostor), x =>
+                    aapc.DoIf(x => x.Is(Team.Impostor), x =>
                     {
                         var sender = CustomRpcSender.Create("Double Agent", SendOption.Reliable);
                         doubleAgents.ForEach(da => sender.RpcSetRole(da, RoleTypes.Impostor, x.OwnerId, changeRoleMap: true));
@@ -1310,6 +1311,9 @@ internal static class IntroCutsceneDestroyPatch
 
             switch (Options.CurrentGameMode)
             {
+                case CustomGameMode.Standard:
+                    Blessed.AfterMeetingTasks();
+                    break;
                 case CustomGameMode.KingOfTheZones:
                     Main.Instance.StartCoroutine(KingOfTheZones.GameStart());
                     break;
@@ -1351,21 +1355,29 @@ internal static class IntroCutsceneDestroyPatch
 
             LateTask.New(() => Main.Instance.StartCoroutine(Utils.NotifyEveryoneAsync()), 3f, "NotifyEveryoneAsync On Game Start");
             LateTask.New(Utils.MarkEveryoneDirtySettings, 0.5f, "SyncAllSettings On Game Start");
+            LateTask.New(() => Main.Instance.StartCoroutine(ShipStatusFixedUpdatePatch.Postfix()), 5f, "ShipStatusFixedUpdatePatch Postfix Start");
         }
         else
         {
             foreach (PlayerControl player in Main.EnumeratePlayerControls())
                 Main.PlayerStates[player.PlayerId].InitTask(player);
-            
-            if (Options.CurrentGameMode == CustomGameMode.Snowdown)
-                Snowdown.GameStart();
+
+            switch (Options.CurrentGameMode)
+            {
+                case CustomGameMode.Snowdown:
+                    Snowdown.GameStart();
+                    break;
+                case CustomGameMode.StopAndGo:
+                    StopAndGo.RoundTimer = Stopwatch.StartNew();
+                    break;
+            }
         }
 
         Logger.Info("OnDestroy", "IntroCutscene");
 
         LateTask.New(() =>
         {
-            Main.GameTimer = 0f;
+            Main.GameTimer.Restart();
             
             if (AmongUsClient.Instance.AmHost && SubmergedCompatibility.IsSubmerged())
                 Main.EnumerateAlivePlayerControls().DoIf(x => !x.IsInRoom((SystemTypes)SubmergedCompatibility.SubmergedSystemTypes.LowerCentral) && !x.IsInRoom((SystemTypes)SubmergedCompatibility.SubmergedSystemTypes.UpperCentral), x => x.TP(new Vector2(3.32f, -26.57f)));
@@ -1397,7 +1409,7 @@ internal static class IntroCutsceneDestroyPatch
 
         LateTask.New(() =>
         {
-            if (Main.CurrentMap == MapNames.Airship && Vector2.Distance(PlayerControl.LocalPlayer.Pos(), new Vector2(-25f, 40f)) < 8f && PlayerControl.LocalPlayer.Is(CustomRoles.GM))
+            if (Main.CurrentMap == MapNames.Airship && FastVector2.DistanceWithinRange(PlayerControl.LocalPlayer.Pos(), new Vector2(-25f, 40f), 8f) && PlayerControl.LocalPlayer.Is(CustomRoles.GM))
                 PlayerControl.LocalPlayer.NetTransform.SnapTo(new(15.5f, 0.0f), (ushort)(PlayerControl.LocalPlayer.NetTransform.lastSequenceId + 8));
         }, 4f, "Airship Spawn FailSafe");
     }

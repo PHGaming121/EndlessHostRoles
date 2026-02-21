@@ -672,7 +672,7 @@ public static class CustomRpcSenderExtensions
                 return false;
             }
 
-            if (Vector2.Distance(pc.Pos(), location) < 0.5f)
+            if (FastVector2.DistanceWithinRange(pc.Pos(), location, 0.5f))
             {
                 if (log) Logger.Warn($"Target ({pc.GetNameWithRole().RemoveHtmlTags()}) is too close to the destination - Teleporting canceled", "TP");
                 return false;

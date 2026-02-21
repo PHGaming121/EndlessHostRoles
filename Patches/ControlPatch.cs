@@ -31,7 +31,7 @@ internal static class ControllerManagerUpdatePatch
         {
             if (HudManager.InstanceExists)
             {
-                if (PlayerControl.LocalPlayer != null)
+                if (PlayerControl.LocalPlayer)
                 {
                     if (Input.GetKeyDown(KeyCode.LeftControl))
                     {
@@ -46,7 +46,7 @@ internal static class ControllerManagerUpdatePatch
                     }
                 }
             
-                if (GameStates.IsLobby && (HudManager.Instance.Chat == null || !HudManager.Instance.Chat.IsOpenOrOpening))
+                if (GameStates.IsLobby && (!HudManager.Instance.Chat || !HudManager.Instance.Chat.IsOpenOrOpening))
                 {
                     if (Input.GetKeyDown(KeyCode.Tab)) OptionShower.Next();
 
@@ -56,7 +56,7 @@ internal static class ControllerManagerUpdatePatch
                             OptionShower.CurrentPage = i;
                     }
 
-                    if (KeysDown(KeyCode.Return) && GameSettingMenu.Instance != null && GameSettingMenu.Instance.isActiveAndEnabled)
+                    if (KeysDown(KeyCode.Return) && GameSettingMenu.Instance && GameSettingMenu.Instance.isActiveAndEnabled)
                         GameSettingMenuPatch.SearchForOptionsAction?.Invoke();
                 }
             }
@@ -149,7 +149,7 @@ internal static class ControllerManagerUpdatePatch
                 Logger.SendInGame(GetString("CancelStartCountDown"));
             }
 
-            if (Input.GetKeyDown(KeyCode.Return) && GameStates.IsLobby && GameStartManager.InstanceExists && Options.EnterKeyToStartGame.GetBool() && GameStartManager.Instance.startState == GameStartManager.StartingStates.NotStarting && !HudManager.Instance.Chat.IsOpenOrOpening && !OnGameJoinedPatch.JoiningGame && GameSettingMenu.Instance == null)
+            if (Input.GetKeyDown(KeyCode.Return) && GameStates.IsLobby && GameStartManager.InstanceExists && Options.EnterKeyToStartGame.GetBool() && GameStartManager.Instance.startState == GameStartManager.StartingStates.NotStarting && !HudManager.Instance.Chat.IsOpenOrOpening && !OnGameJoinedPatch.JoiningGame && !GameSettingMenu.Instance)
             {
                 Logger.Info("ENTER pressed: Starting game by host", "KeyCommand");
                 GameStartManager.Instance.BeginGame();
@@ -219,15 +219,15 @@ internal static class ControllerManagerUpdatePatch
                 Utils.SendMessage(GetString("HostKillSelfByCommand"), title: $"<color=#ff0000>{GetString("DefaultSystemMessageTitle")}</color>");
             }
 
+            if (!Options.NoGameEnd.GetBool()) return;
+
+#if DEBUG
             if (KeysDown(KeyCode.F2, KeyCode.LeftControl))
             {
                 Logger.IsAlsoInGame = !Logger.IsAlsoInGame;
                 Logger.SendInGame($"In-game output log: {Logger.IsAlsoInGame}");
             }
 
-            if (!Options.NoGameEnd.GetBool()) return;
-
-#if DEBUG
             if (KeysDown(KeyCode.Return, KeyCode.F, KeyCode.LeftShift))
             {
                 Utils.FlashColor(new(1f, 0f, 0f, 0.3f));
@@ -377,7 +377,7 @@ public static class InGameRoleInfoMenu
 
     private static GameObject MainInfo;
     private static GameObject AddonsInfo;
-    public static bool Showing => Fill != null && Fill.active && Menu != null && Menu.active;
+    public static bool Showing => Fill && Fill.active && Menu && Menu.active;
     private static SpriteRenderer FillSp => Fill.GetComponent<SpriteRenderer>();
     private static TextMeshPro MainInfoTMP => MainInfo.GetComponent<TextMeshPro>();
     private static TextMeshPro AddonsInfoTMP => AddonsInfo.GetComponent<TextMeshPro>();
@@ -418,7 +418,7 @@ public static class InGameRoleInfoMenu
 
     public static void SetRoleInfoRef(PlayerControl player)
     {
-        if (player == null) return;
+        if (!player) return;
 
         if (!Fill || !Menu) Init();
 

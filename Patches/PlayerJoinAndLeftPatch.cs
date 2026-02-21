@@ -41,7 +41,7 @@ internal static class OnGameJoinedPatch
         GameStates.InGame = false;
         ErrorText.Instance?.Clear();
         ChatCommands.VotedToStart = [];
-        Main.GameTimer = 0f;
+        Main.GameTimer.Reset();
 
         Utils.DirtyName = [];
 
@@ -499,7 +499,7 @@ internal static class OnPlayerJoinedPatch
             catch { }
         }, 4.5f, "green bean kick late task", false);
 
-        if (AmongUsClient.Instance.AmHost && client.FriendCode == "" && Options.KickPlayerFriendCodeNotExist.GetBool() && GameStates.CurrentServerType is not GameStates.ServerType.Modded and not GameStates.ServerType.Niko and not GameStates.ServerType.Local)
+        if (AmongUsClient.Instance.AmHost && !client.ProductUserId.IsNullOrWhiteSpace() && client.ProductUserId.Length == 32 && client.FriendCode == "" && Options.KickPlayerFriendCodeNotExist.GetBool() && GameStates.CurrentServerType is not GameStates.ServerType.Local)
         {
             if (!BanManager.TempBanWhiteList.Contains(client.GetHashedPuid())) BanManager.TempBanWhiteList.Add(client.GetHashedPuid());
 
@@ -516,7 +516,7 @@ internal static class OnPlayerJoinedPatch
             Logger.Info(msg, "Android Kick");
         }
 
-        if (FriendsListManager.InstanceExists && FriendsListManager.Instance.IsPlayerBlockedUsername(client.FriendCode) && AmongUsClient.Instance.AmHost && GameStates.CurrentServerType is not GameStates.ServerType.Modded and not GameStates.ServerType.Niko and not GameStates.ServerType.Local)
+        if (FriendsListManager.InstanceExists && !client.FriendCode.IsNullOrWhiteSpace() && FriendsListManager.Instance.IsPlayerBlockedUsername(client.FriendCode) && AmongUsClient.Instance.AmHost && GameStates.CurrentServerType is not GameStates.ServerType.Local)
         {
             AmongUsClient.Instance.KickPlayer(client.Id, true);
             Logger.Info($"Blocked Player {client.PlayerName}({client.FriendCode}) has been banned.", "BAN");
@@ -682,9 +682,9 @@ internal static class InnerNetClientSpawnPatch
             LateTask.New(() =>
             {
                 if (Main.OverrideWelcomeMsg != "")
-                    Utils.SendMessage(Main.OverrideWelcomeMsg, client.Character.PlayerId, sendOption: SendOption.None);
+                    Utils.SendMessage(Main.OverrideWelcomeMsg, client.Character.PlayerId, importance: MessageImportance.Low);
                 else
-                    TemplateManager.SendTemplate("welcome", client.Character.PlayerId, true, sendOption: SendOption.None);
+                    TemplateManager.SendTemplate("welcome", client.Character.PlayerId, true, importance: MessageImportance.Low);
             }, GameStates.CurrentServerType == GameStates.ServerType.Niko ? 7f : 3f, "Welcome Message");
 
             if (GameStates.IsOnlineGame && !client.Character.IsHost())
@@ -815,27 +815,6 @@ internal static class PlayerControlCheckNamePatch
             Logger.Warn($"Standard nickname: {playerName} => {name}", "Name Format");
             playerName = name;
         }
-    }
-}
-
-//[HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.FixedUpdate))]
-internal static class InnerNetClientFixedUpdatePatch
-{
-    private static float Timer;
-
-    public static void Postfix()
-    {
-        try
-        {
-            if (GameStates.IsLocalGame || !GameStates.IsLobby || !Options.KickNotJoinedPlayersRegularly.GetBool() || Main.AllPlayerControls.Count < 7) return;
-
-            Timer += Time.fixedDeltaTime;
-            if (Timer < 25f) return;
-            Timer = 0f;
-
-            AmongUsClient.Instance.KickNotJoinedPlayers();
-        }
-        catch (Exception e) { Utils.ThrowException(e); }
     }
 }
 

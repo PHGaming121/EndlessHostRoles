@@ -26,7 +26,7 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
 
     private CountdownTimer Timer;
 
-    public IEnumerable<PlayerControl> NearbyKillers => GetPlayersInRadius(PatrolRadius, StartingPosition).Where(x => !x.Is(Team.Crewmate) && (!Sentinel.IsMadmate() || !x.Is(Team.Impostor)) && SentinelId != x.PlayerId);
+    public IEnumerable<PlayerControl> NearbyKillers => FastVector2.GetPlayersInRange(StartingPosition, PatrolRadius).Where(x => !x.Is(Team.Crewmate) && (!Sentinel.IsMadmate() || !x.Is(Team.Impostor)) && SentinelId != x.PlayerId);
     
     public void SetPlayer()
     {
@@ -40,7 +40,11 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
         StartingPosition = Sentinel.Pos();
         NearbyKillers.Do(x => x.Notify(string.Format(GetString("KillerNotifyPatrol"), PatrolDuration)));
         Sentinel.MarkDirtySettings();
-        Timer = new CountdownTimer(PatrolDuration, FinishPatrolling, onTick: CheckPlayerPositions, onCanceled: () => IsPatrolling = false);
+        Timer = new CountdownTimer(PatrolDuration, FinishPatrolling, onTick: CheckPlayerPositions, onCanceled: () =>
+        {
+            Timer = null;
+            IsPatrolling = false;
+        });
     }
 
     private void CheckPlayerPositions()
@@ -64,6 +68,7 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
 
     private void FinishPatrolling()
     {
+        Timer = null;
         IsPatrolling = false;
         NearbyKillers.Do(x => x.Suicide(PlayerState.DeathReason.Patrolled, Sentinel));
         Sentinel.MarkDirtySettings();

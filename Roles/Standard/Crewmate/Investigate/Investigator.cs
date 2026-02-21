@@ -126,10 +126,9 @@ public class Investigator : RoleBase
                 }
                 else
                 {
-                    float range = NormalGameOptionsV10.KillDistances[Mathf.Clamp(player.Is(CustomRoles.Reach) ? 2 : Main.NormalOptions.KillDistance, 0, 2)] + 0.5f;
-                    float dis = Vector2.Distance(player.Pos(), arTarget.Pos());
-
-                    if (dis <= range)
+                    float range = GameManager.Instance.LogicOptions.GetKillDistance();
+                    
+                    if (FastVector2.DistanceWithinRange(player.Pos(), arTarget.Pos(), range))
                         InvestigatorTimer[player.PlayerId] = (arTarget, arTime + Time.fixedDeltaTime);
                     else
                     {

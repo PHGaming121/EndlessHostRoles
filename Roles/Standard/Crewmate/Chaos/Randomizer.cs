@@ -6,7 +6,6 @@ using AmongUs.GameOptions;
 using EHR.Modules;
 using EHR.Modules.Extensions;
 using Hazel;
-using UnityEngine;
 using static EHR.Roles.Randomizer;
 
 namespace EHR.Roles;
@@ -226,7 +225,7 @@ internal static class EffectExtenstions
                         {
                             foreach (KeyValuePair<Vector2, Vector2> rift2 in Rifts)
                             {
-                                if (rift1.Key != rift2.Key && Vector2.Distance(rift1.Key, rift2.Key) <= 4f)
+                                if (rift1.Key != rift2.Key && FastVector2.DistanceWithinRange(rift1.Key, rift2.Key, 4f))
                                     riftsToRemove.Add(rift2.Key);
                             }
                         }
@@ -237,8 +236,16 @@ internal static class EffectExtenstions
 
                     break;
                 case Effect.TimeBomb:
-                    Bombs.TryAdd(PickRandomPlayer().Pos(), (Utils.TimeStamp, IRandom.Instance.Next(MinimumEffectDuration, MaximumEffectDuration)));
-                    Utils.SendRPC(CustomRPC.SyncRoleData, randomizer.PlayerId, 1, Bombs.Last().Key, Bombs.Last().Value.PlaceTimeStamp, Bombs.Last().Value.ExplosionDelay);
+                    Vector2 randomPlayerPos = PickRandomPlayer().Pos();
+                    int bombTime = IRandom.Instance.Next(MinimumEffectDuration, MaximumEffectDuration);
+                    Bombs.TryAdd(randomPlayerPos, new CountdownTimer(bombTime, () =>
+                    {
+                        foreach (PlayerControl pc in FastVector2.GetPlayersInRange(randomPlayerPos, RandomFloat))
+                            pc.Suicide(PlayerState.DeathReason.RNG, randomizer);
+
+                        Bombs.Remove(randomPlayerPos);
+                    }, onTick: () => Utils.NotifyRoles(SendOption: SendOption.None), onCanceled: () => Bombs.Remove(randomPlayerPos)));
+                    Utils.SendRPC(CustomRPC.SyncRoleData, randomizer.PlayerId, 1, randomPlayerPos, bombTime);
                     break;
                 case Effect.Tornado:
                     Tornado.SpawnTornado(PickRandomPlayer());
@@ -458,7 +465,7 @@ internal class Randomizer : RoleBase
     public static Dictionary<byte, float> AllPlayerDefaultSpeed = [];
 
     public static Dictionary<Vector2, Vector2> Rifts = [];
-    public static Dictionary<Vector2, (long PlaceTimeStamp, int ExplosionDelay)> Bombs = [];
+    public static Dictionary<Vector2, CountdownTimer> Bombs = [];
 
     public static Stopwatch TimeSinceLastMeeting;
     private static Dictionary<byte, long> LastTP = [];
@@ -554,7 +561,7 @@ internal class Randomizer : RoleBase
 
             if (!ReportDeadBodyPatch.MeetingStarted && TimeSinceLastMeeting.IsRunning && TimeSinceLastMeeting.Elapsed.TotalSeconds > 10f)
             {
-                Effect effect = PickRandomEffect(pc.PlayerId);
+                Effect effect = PickRandomEffect();
                 effect.Apply(pc);
             }
             
@@ -586,7 +593,7 @@ internal class Randomizer : RoleBase
         CurrentEffects[pc.PlayerId].TryAdd(effect, (Utils.TimeStamp, duration));
     }
 
-    private static Effect PickRandomEffect(byte id)
+    private static Effect PickRandomEffect()
     {
         long now = Utils.TimeStamp;
 
@@ -596,7 +603,6 @@ internal class Randomizer : RoleBase
         if (effect == Effect.GhostPlayer)
         {
             if (LastDeathEffect + 60 > now) return Effect.AddonRemove;
-
             LastDeathEffect = now;
         }
 
@@ -662,7 +668,7 @@ internal class Randomizer : RoleBase
         LastDeathEffect = Utils.TimeStamp;
         Rifts.Clear();
         Bombs.Clear();
-        Utils.SendRPC(CustomRPC.SyncRoleData, PlayerIdList[0], 3);
+        Utils.SendRPC(CustomRPC.SyncRoleData, PlayerIdList[0], 2);
 
         foreach (PlayerControl pc in Main.EnumeratePlayerControls())
         {
@@ -679,41 +685,15 @@ internal class Randomizer : RoleBase
         LastDeathEffect = Utils.TimeStamp;
     }
 
-    public override void OnGlobalFixedUpdate(PlayerControl player, bool lowLoad)
-    {
-        try
-        {
-            if (lowLoad || !Exists || !GameStates.IsInTask || Bombs.Count == 0 || Main.HasJustStarted) return;
-
-            long now = Utils.TimeStamp;
-            PlayerControl randomizer = Utils.GetPlayerById(PlayerIdList.FirstOrDefault());
-
-            foreach (KeyValuePair<Vector2, (long PlaceTimeStamp, int ExplosionDelay)> bomb in Bombs)
-            {
-                if (bomb.Value.PlaceTimeStamp + bomb.Value.ExplosionDelay < now)
-                {
-                    IEnumerable<PlayerControl> players = Utils.GetPlayersInRadius(RandomFloat, bomb.Key);
-                    foreach (PlayerControl pc in players) pc.Suicide(PlayerState.DeathReason.RNG, randomizer);
-
-                    Bombs.Remove(bomb.Key);
-                    Utils.SendRPC(CustomRPC.SyncRoleData, randomizer.PlayerId, 2, bomb.Key);
-                }
-            }
-        }
-        catch (Exception ex) { Logger.Exception(ex, "Randomizer"); }
-    }
-
     public void ReceiveRPC(MessageReader reader)
     {
         switch (reader.ReadPackedInt32())
         {
             case 1:
-                Bombs.TryAdd(NetHelpers.ReadVector2(reader), (long.Parse(reader.ReadString()), reader.ReadPackedInt32()));
+                Vector2 key = NetHelpers.ReadVector2(reader);
+                Bombs.TryAdd(key, new CountdownTimer(reader.ReadPackedInt32(), () => Bombs.Remove(key), onCanceled: () => Bombs.Remove(key)));
                 break;
             case 2:
-                Bombs.Remove(NetHelpers.ReadVector2(reader));
-                break;
-            case 3:
                 Bombs.Clear();
                 break;
         }
@@ -721,11 +701,8 @@ internal class Randomizer : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (seer == null || seer.PlayerId != target.PlayerId || Bombs.Count == 0) return string.Empty;
-
-        KeyValuePair<Vector2, (long PlaceTimeStamp, int ExplosionDelay)> bomb = Bombs.FirstOrDefault(x => Vector2.Distance(x.Key, seer.Pos()) <= 5f);
-        long time = bomb.Value.ExplosionDelay - (Utils.TimeStamp - bomb.Value.PlaceTimeStamp) + 1;
-        return time < 0 ? string.Empty : $"<#ffff00>⚠ {time}</color>";
+        if (seer == null || seer.PlayerId != target.PlayerId || Bombs.Count == 0 || !Bombs.FindFirst(x => FastVector2.DistanceWithinRange(x.Key, seer.Pos(), 5f), out KeyValuePair<Vector2, CountdownTimer> kvp)) return string.Empty;
+        return $"<#ffff00>⚠ {(int)kvp.Value.Remaining.TotalSeconds}</color>";
     }
 
     public override void OnCheckPlayerPosition(PlayerControl pc)
@@ -741,14 +718,14 @@ internal class Randomizer : RoleBase
 
             foreach (KeyValuePair<Vector2, Vector2> rift in Rifts)
             {
-                if (Vector2.Distance(pos, rift.Key) < 2f)
+                if (FastVector2.DistanceWithinRange(pos, rift.Key, 2f))
                 {
                     pc.TP(rift.Value);
                     LastTP[pc.PlayerId] = now;
                     return;
                 }
 
-                if (Vector2.Distance(pos, rift.Value) < 2f)
+                if (FastVector2.DistanceWithinRange(pos, rift.Value, 2f))
                 {
                     pc.TP(rift.Key);
                     LastTP[pc.PlayerId] = now;

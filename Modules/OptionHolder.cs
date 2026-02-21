@@ -756,6 +756,7 @@ public static class Options
     public static OptionItem IntegrateNaturalDisasters;
     public static OptionItem EnableGameTimeLimit;
     public static OptionItem GameTimeLimit;
+    public static OptionItem GameTimeLimitRunsDuringMeetings;
     public static OptionItem ShowDifferentEjectionMessageForSomeRoles;
     public static OptionItem ShowAntiBlackoutWarning;
     public static OptionItem AllowConsole;
@@ -1708,6 +1709,7 @@ public static class Options
             .SetColor(Color.magenta);
 
         KickNotJoinedPlayersRegularly = new BooleanOptionItem(60295, "KickNotJoinedPlayersRegularly", true, TabGroup.SystemSettings)
+            .SetHidden(true)
             .SetColor(Color.yellow);
 
         CheatResponses = new StringOptionItem(19319, "CheatResponses", CheatResponsesName, 4, TabGroup.SystemSettings)
@@ -3052,6 +3054,10 @@ public static class Options
             .SetColor(new Color32(193, 255, 209, byte.MaxValue))
             .SetParent(EnableGameTimeLimit)
             .SetValueFormat(OptionFormat.Seconds);
+        
+        GameTimeLimitRunsDuringMeetings = new BooleanOptionItem(24457, "GameTimeLimitRunsDuringMeetings", false, TabGroup.GameSettings)
+            .SetColor(new Color32(193, 255, 209, byte.MaxValue))
+            .SetParent(EnableGameTimeLimit);
 
         OverrideVisionInVents = new BooleanOptionItem(19436, "OverrideVisionInVents", false, TabGroup.GameSettings);
 
