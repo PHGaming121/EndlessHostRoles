@@ -82,7 +82,7 @@ internal class StopAndGoPlayerData(Counter[] counters, float positionX, float po
 
     public int Lives { get; private set; } = lives;
 
-    private Stopwatch LostLifeCooldownTimer { get; set; }
+    private Stopwatch LostLifeCooldownTimer { get; set; } = new();
 
     public override string ToString()
     {

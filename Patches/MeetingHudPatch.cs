@@ -1164,6 +1164,8 @@ internal static class MeetingHudStartPatch
         Ventriloquist.StartMeetingPatch.Postfix(__instance);
         ShowHostMeetingPatch.Setup_Postfix(__instance);
         Crowded.MeetingHudStartPatch.Postfix(__instance);
+        
+        TextBoxPatch.OnMeetingStart();
     }
 }
 

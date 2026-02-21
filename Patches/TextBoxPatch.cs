@@ -282,6 +282,7 @@ public static class TextBoxPatch
                     bool IsInvalidArg() =>
                         arg != argName && argName switch
                         {
+                            "{uuid}" => arg.Length > 16,
                             "{id}" or "{id1}" or "{id2}" => !byte.TryParse(arg, out byte id) || Main.EnumeratePlayerControls().All(x => x.PlayerId != id),
                             "{number}" or "{level}" or "{duration}" or "{number1}" or "{number2}" => !int.TryParse(arg, out int num) || num < 0,
                             "{team}" => arg is not "crew" and not "imp",
@@ -372,6 +373,13 @@ public static class TextBoxPatch
             AdditionalInfoText?.gameObject.SetActive(open);
         }
         catch { }
+    }
+
+    public static void OnMeetingStart()
+    {
+        PlaceHolderText?.transform.SetAsLastSibling();
+        CommandInfoText?.transform.SetAsLastSibling();
+        AdditionalInfoText?.transform.SetAsLastSibling();
     }
 
     [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Update))]
