@@ -54,7 +54,7 @@ public class Perplexer : RoleBase
 
     public override bool OnShapeshift(PlayerControl shapeshifter, PlayerControl target, bool shapeshifting)
     {
-        if (MarkedId == byte.MaxValue && target.IsAlive() && shapeshifter.GetAbilityUseLimit() >= 1f)
+        if (shapeshifting && MarkedId == byte.MaxValue && target.IsAlive() && shapeshifter.GetAbilityUseLimit() >= 1f)
         {
             MarkedId = target.PlayerId;
             Main.AllPlayerSpeed[MarkedId] *= -1;
