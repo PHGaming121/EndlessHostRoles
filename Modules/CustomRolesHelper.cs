@@ -368,6 +368,7 @@ internal static class CustomRolesHelper
             CustomRoles.Unshifter => CustomRoles.Impostor,
             CustomRoles.Scanner => CustomRoles.Phantom,
             CustomRoles.Fakeshifter => CustomRoles.Shapeshifter,
+            CustomRoles.Perplexer => CustomRoles.Shapeshifter,
             CustomRoles.Silencer => Silencer.SilenceMode.GetValue() switch
             {
                 0 => CustomRoles.Impostor,
@@ -831,7 +832,8 @@ internal static class CustomRolesHelper
             CustomRoles.Camouflager or
             CustomRoles.Twister or
             CustomRoles.Lurker or
-            CustomRoles.Fakeshifter;
+            CustomRoles.Fakeshifter or
+            CustomRoles.Perplexer;
     }
 
     public static bool IsNeutral(this CustomRoles role, bool check = false)
@@ -1694,6 +1696,7 @@ internal static class CustomRolesHelper
             CustomRoles.Librarian => RoleOptionType.Impostor_Support,
             CustomRoles.Nullifier => RoleOptionType.Impostor_Support,
             CustomRoles.Occultist => RoleOptionType.Impostor_Support,
+            CustomRoles.Perplexer => RoleOptionType.Impostor_Support,
             CustomRoles.Silencer => RoleOptionType.Impostor_Support,
             CustomRoles.Swapster => RoleOptionType.Impostor_Support,
             CustomRoles.TimeThief => RoleOptionType.Impostor_Support,
