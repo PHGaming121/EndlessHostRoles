@@ -64,7 +64,11 @@ internal static class ChatControllerUpdatePatch
 
         if (Input.GetKeyDown(KeyCode.Tab)) TextBoxPatch.OnTabPress(__instance);
 
-        __instance.freeChatField.textArea.AllowPaste = true;
+        if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
+            ClipboardHelper.PutClipboardString(__instance.freeChatField.textArea.text);
+
+        if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.V))
+            __instance.freeChatField.textArea.SetText(__instance.freeChatField.textArea.text + GUIUtility.systemCopyBuffer.Trim());
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.X))
         {
@@ -108,6 +112,7 @@ public static class ChatManager
 
     private static bool CheckCommand(ref string msg, string command, bool exact = true)
     {
+        Utils.CheckServerCommand(ref msg, out _);
         string[] comList = command.Split('|');
 
         foreach (string str in comList)
@@ -160,7 +165,7 @@ public static class ChatManager
         string originalMessage = message.Trim();
         message = message.ToLower().Trim();
 
-        if (!player.IsAlive() || !AmongUsClient.Instance.AmHost || (Silencer.ForSilencer.Contains(player.PlayerId) && player.IsAlive())) return;
+        if (!AmongUsClient.Instance.AmHost || !player.IsAlive() || Silencer.ForSilencer.Contains(player.PlayerId)) return;
 
         int operate = message switch
         {
@@ -173,6 +178,7 @@ public static class ChatManager
         switch (operate)
         {
             case 1: // Guessing Command & Such
+            {
                 Logger.Info("Special Command", "ChatManager");
                 if (player.AmOwner) break;
 
@@ -188,13 +194,22 @@ public static class ChatManager
                 }, 0.3f, "Trying Delayed Guess");
 
                 break;
+            }
             case 2: // /up and role ability commands
             case 4: // /r, /n, /m
+            {
                 Logger.Info($"Command: {message}", "ChatManager");
                 break;
+            }
             case 3: // In Lobby & Evertything Else
+            {
                 AddChatHistory(player, originalMessage);
+                
+                if (GameStates.IsMeeting && player.Is(CustomRoles.Talkative))
+                    Talkative.OnMessageSend(player);
+                
                 break;
+            }
         }
 
         if (Options.CurrentGameMode is CustomGameMode.FFA or CustomGameMode.SoloPVP or CustomGameMode.NaturalDisasters or CustomGameMode.Mingle or CustomGameMode.HideAndSeek && GameStates.InGame && !message.StartsWith('/'))

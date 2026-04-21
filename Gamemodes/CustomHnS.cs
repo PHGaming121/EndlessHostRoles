@@ -29,6 +29,7 @@ internal static class CustomHnS
     public static List<CustomRoles> AllHnSRoles = [];
 
     public static int SeekerNum => Math.Max(Main.RealOptionsData.GetInt(Int32OptionNames.NumImpostors), 1);
+    public static int RandomNeutralsNum => IRandom.Instance.Next(MinNeutrals.GetInt(), MaxNeutrals.GetInt() + 1);
     public static int MaximumGameLength => MaxGameLength.GetInt();
     public static bool Chat => ChatDuringGame.GetBool();
 
@@ -134,7 +135,7 @@ internal static class CustomHnS
 
         Dictionary<Team, int> memberNum = new()
         {
-            [Team.Neutral] = IRandom.Instance.Next(MinNeutrals.GetInt(), MaxNeutrals.GetInt() + 1),
+            [Team.Neutral] = RandomNeutralsNum,
             [Team.Impostor] = SeekerNum
         };
 
@@ -142,12 +143,21 @@ internal static class CustomHnS
 
         Logger.Warn($"Number of impostors: {memberNum[Team.Impostor]}", "HnsRoleAssigner");
 
-        foreach (KeyValuePair<byte, CustomRoles> item in Main.SetRoles)
+        Dictionary<byte, CustomRoles> preSetRoles = Main.SetRoles.AddRange(ChatCommands.DraftResult, false);
+
+        if (ChatCommands.DraftResult.Count > 0 && ChatCommands.DraftResult.Count + preSetRoles.Count >= allPlayers.Count && preSetRoles.All(x => x.Value is not (CustomRoles.Seeker or CustomRoles.Locator or CustomRoles.Dasher or CustomRoles.Venter or CustomRoles.Agent)))
+        {
+            byte removeKey = ChatCommands.DraftResult.Keys.RandomElement();
+            ChatCommands.DraftResult.Remove(removeKey);
+            preSetRoles.Remove(removeKey);
+        }
+
+        foreach (KeyValuePair<byte, CustomRoles> item in preSetRoles)
         {
             try
             {
                 PlayerControl pc = allPlayers.FirstOrDefault(x => x.PlayerId == item.Key);
-                if (pc == null) continue;
+                if (!pc) continue;
 
                 result[pc] = item.Value;
                 allPlayers.RemoveAll(x => x.PlayerId == item.Key);
@@ -189,7 +199,7 @@ internal static class CustomHnS
                     try
                     {
                         PlayerControl pc = playerTeams[team][0];
-                        if (pc == null) continue;
+                        if (!pc) continue;
 
                         result[pc] = role;
                         allPlayers.Remove(pc);
@@ -227,7 +237,7 @@ internal static class CustomHnS
             .Where(x => x != null)
             .ToDictionary(x => x.GetType().Name, x => x);
 
-        PlayerRoles = result.ToDictionary(x => x.Key.PlayerId, x => (roleInterfaces[x.Value.ToString()], x.Value));
+        PlayerRoles = result.ToDictionary(x => x.Key.PlayerId, x => (roleInterfaces.GetValueOrDefault(x.Value.ToString(), new Hider()), x.Value));
 
         if (Main.GM.Value)
         {
@@ -497,7 +507,7 @@ internal static class CustomHnS
 
     public static void AddFoxesToWinners()
     {
-        List<byte> foxes = Main.PlayerStates.Values.Where(x => x.MainRole == CustomRoles.Fox && x.Player != null && x.Player.IsAlive()).Select(x => x.Player.PlayerId).ToList();
+        List<byte> foxes = Main.PlayerStates.Values.Where(x => x.MainRole == CustomRoles.Fox && x.Player && x.Player.IsAlive()).Select(x => x.Player.PlayerId).ToList();
         if (foxes.Count == 0) return;
 
         CustomWinnerHolder.AdditionalWinnerTeams.Add(AdditionalWinners.Fox);
@@ -506,7 +516,7 @@ internal static class CustomHnS
 
     public static void OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (killer == null || target == null || PlayerRoles[killer.PlayerId].Interface.Team != Team.Impostor || PlayerRoles[target.PlayerId].Interface.Team == Team.Impostor || IsBlindTime) return;
+        if (PlayerRoles[killer.PlayerId].Interface.Team != Team.Impostor || PlayerRoles[target.PlayerId].Interface.Team == Team.Impostor || IsBlindTime) return;
 
         killer.Kill(target);
 

@@ -5,11 +5,13 @@ using System.Linq;
 using AmongUs.GameOptions;
 using BepInEx;
 using EHR.Gamemodes;
-using EHR.Patches;
 using EHR.Roles;
 using HarmonyLib;
 using Hazel;
 using UnityEngine;
+#if DEBUG
+using EHR.Patches;
+#endif
 
 namespace EHR;
 
@@ -32,6 +34,7 @@ public static class MessageReaderUpdateSystemPatch
             if (EAC.CheckInvalidSabotage(systemType, player, amount))
             {
                 Logger.Info("EAC patched Sabotage RPC", "MessageReaderUpdateSystemPatch");
+                reader.Recycle();
                 return false;
             }
 
@@ -255,7 +258,8 @@ internal static class StartPatch
 
         if (Options.AllowConsole.GetBool())
         {
-            if (!ConsoleManager.ConsoleActive && ConsoleManager.ConsoleEnabled) ConsoleManager.CreateConsole();
+            if (!ConsoleManager.ConsoleActive && ConsoleManager.ConsoleEnabled)
+                ConsoleManager.CreateConsole();
         }
         else
         {
@@ -271,10 +275,12 @@ internal static class StartPatch
 [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.StartMeeting))]
 internal static class StartMeetingPatch
 {
-    public static void Prefix( /*ShipStatus __instance, PlayerControl reporter,*/ NetworkedPlayerInfo target)
+    public static void Prefix( /*ShipStatus __instance, PlayerControl reporter,*/ [HarmonyArgument(1)] NetworkedPlayerInfo target)
     {
         MeetingStates.ReportTarget = target;
         MeetingStates.DeadBodies = Object.FindObjectsOfType<DeadBody>();
+        
+        ReportDeadBodyPatch.AlreadyReportedBodies.UnionWith(MeetingStates.DeadBodies.Select(db => db.ParentId));
     }
 }
 
@@ -283,13 +289,8 @@ internal static class CheckTaskCompletionPatch
 {
     public static bool Prefix(ref bool __result)
     {
-        if (Options.DisableTaskWin.GetBool() || Options.NoGameEnd.GetBool() || TaskState.InitialTotalTasks == 0 || (Options.DisableTaskWinIfAllCrewsAreDead.GetBool() && !Main.EnumerateAlivePlayerControls().Any(x => x.Is(CustomRoleTypes.Crewmate))) || (Options.DisableTaskWinIfAllCrewsAreConverted.GetBool() && Main.EnumerateAlivePlayerControls().Where(x => x.Is(Team.Crewmate) && x.GetRoleTypes() is RoleTypes.Crewmate or RoleTypes.Engineer or RoleTypes.Scientist or RoleTypes.CrewmateGhost or RoleTypes.GuardianAngel).All(x => x.IsConverted())) || Options.CurrentGameMode != CustomGameMode.Standard)
-        {
-            __result = false;
-            return false;
-        }
-
-        return true;
+        __result = false;
+        return false;
     }
 }
 
@@ -311,7 +312,7 @@ public static class HauntMenuMinigameSetHauntTargetPatch
     {
         if (Options.CurrentGameMode == CustomGameMode.Quiz && Quiz.AllowKills) return false;
 
-        if (target == null)
+        if (!target)
         {
             __instance.HauntTarget = null;
             __instance.NameText.text = "";
@@ -324,7 +325,7 @@ public static class HauntMenuMinigameSetHauntTargetPatch
             __instance.HauntingText.enabled = true;
             __instance.NameText.text = Main.AllPlayerNames.GetValueOrDefault(target.PlayerId, target.Data?.GetPlayerName(PlayerOutfitType.Default));
 
-            if (__instance.HauntTarget != null && Options.GhostCanSeeOtherRoles.GetBool() && (!Main.DiedThisRound.Contains(PlayerControl.LocalPlayer.PlayerId) || !Utils.IsRevivingRoleAlive()))
+            if (__instance.HauntTarget && Options.GhostCanSeeOtherRoles.GetBool() && (!Main.DiedThisRound.Contains(PlayerControl.LocalPlayer.PlayerId) || !Utils.IsRevivingRoleAlive()))
                 __instance.FilterText.text = __instance.HauntTarget.GetCustomRole().ToColoredString();
             else
                 __instance.FilterText.text = "";
@@ -408,7 +409,7 @@ internal static class PerformVentOpPatch
     {
         if (!AmongUsClient.Instance.AmHost) return true;
 
-        if (Utils.GetPlayerById(playerId) == null) return true;
+        if (!Utils.GetPlayerById(playerId)) return true;
 
         switch (op)
         {
@@ -540,7 +541,7 @@ internal static class VentilationSystemDeterioratePatch
 
         foreach (NetworkedPlayerInfo playerInfo in GameData.Instance.AllPlayers)
         {
-            if (playerInfo != null && !playerInfo.Disconnected)
+            if (playerInfo && !playerInfo.Disconnected)
                 allPlayers.Add(playerInfo);
         }
 
@@ -594,7 +595,16 @@ internal static class VentilationSystemDeterioratePatch
 
     public static bool BlockVentInteraction(PlayerControl pc)
     {
-        return !pc.AmOwner && !pc.IsModdedClient() && !pc.Data.IsDead && pc.GetRoleTypes() is RoleTypes.Engineer or RoleTypes.Impostor or RoleTypes.Shapeshifter or RoleTypes.Phantom && ShipStatus.Instance.AllVents.Any(vent => !pc.CanUseVent(vent.Id));
+        try
+        {
+            if (!ShipStatus.Instance) return false;
+            return !pc.AmOwner && !pc.IsModdedClient() && !pc.Data.IsDead && pc.GetRoleTypes() is RoleTypes.Engineer or RoleTypes.Impostor or RoleTypes.Shapeshifter or RoleTypes.Phantom && ShipStatus.Instance.AllVents.Any(vent => !pc.CanUseVent(vent.Id));
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            return false;
+        }
     }
 
     public static void SerializeV2(VentilationSystem __instance, PlayerControl player = null)
@@ -602,7 +612,7 @@ internal static class VentilationSystemDeterioratePatch
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
             if (pc.AmOwner) continue;
-            if (player != null && pc != player) continue;
+            if (player && pc != player) continue;
 
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
 
@@ -619,7 +629,7 @@ internal static class VentilationSystemDeterioratePatch
 
                 foreach (NetworkedPlayerInfo playerInfo in GameData.Instance.AllPlayers)
                 {
-                    if (playerInfo != null && !playerInfo.Disconnected)
+                    if (playerInfo && !playerInfo.Disconnected)
                         allPlayers.Add(playerInfo);
                 }
 

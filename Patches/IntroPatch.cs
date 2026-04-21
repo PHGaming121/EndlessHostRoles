@@ -430,7 +430,7 @@ internal static class SetUpRoleTextPatch
         }
 
         sb.Append("-------------Other Information-------------\n");
-        sb.Append($"Number of players: {Main.AllPlayerControls.Count}\n");
+        sb.Append($"Number of players: {PlayerControl.AllPlayerControls.Count}\n");
         sb.Append($"Game mode: {GetString(Options.CurrentGameMode.ToString())}\n");
         sb.Append($"Map: {Main.CurrentMap}\n");
         sb.Append($"Server: {Utils.GetRegionName()}");
@@ -1131,13 +1131,15 @@ internal static class IntroCutsceneDestroyPatch
         PreventKill = true;
         LateTask.New(() => PreventKill = false, 10f, "PreventKillReset");
 
+        var apc = Main.AllPlayerControls;
+        
         // Set roleAssigned as false for overriding roles for modded players
         // for vanilla clients we use "Data.Disconnected"
-        Main.EnumeratePlayerControls().Do(x => x.roleAssigned = false);
+        apc.Do(x => x.roleAssigned = false);
 
         if (AmongUsClient.Instance.AmHost)
         {
-            Main.EnumeratePlayerControls().DoIf(x => x.Is(CustomRoles.NotAssigned) && ((x.AmOwner && Main.GM.Value) || ChatCommands.Spectators.Contains(x.PlayerId)), x => x.RpcSetCustomRole(CustomRoles.GM));
+            LateTask.New(() => apc.DoIf(x => x && ((x.AmOwner && Main.GM.Value) || ChatCommands.Spectators.Contains(x.PlayerId)), x => x.RpcSetCustomRole(CustomRoles.GM)), 8f);
             
             var aapc = Main.AllAlivePlayerControls;
 
@@ -1176,6 +1178,7 @@ internal static class IntroCutsceneDestroyPatch
                 case CustomGameMode.Quiz when Quiz.Chat:
                 case CustomGameMode.HideAndSeek when CustomHnS.Chat:
                 case CustomGameMode.NaturalDisasters when NaturalDisasters.Chat:
+                case CustomGameMode.Standard when Options.ChatDuringGame.GetBool():
                     LateTask.New(Utils.SetChatVisibleForAll, 4f);
                     break;
             }
@@ -1292,7 +1295,7 @@ internal static class IntroCutsceneDestroyPatch
                 {
                     lp.Data.Role.AffectedByLightAffectors = false;
 
-                    foreach (PlayerControl target in Main.EnumeratePlayerControls())
+                    foreach (PlayerControl target in apc)
                     {
                         try
                         {
@@ -1313,6 +1316,7 @@ internal static class IntroCutsceneDestroyPatch
             {
                 case CustomGameMode.Standard:
                     Blessed.AfterMeetingTasks();
+                    Entombed.AfterMeeting();
                     break;
                 case CustomGameMode.KingOfTheZones:
                     Main.Instance.StartCoroutine(KingOfTheZones.GameStart());
@@ -1349,17 +1353,17 @@ internal static class IntroCutsceneDestroyPatch
                     break;
             }
 
-            Utils.CheckAndSetVentInteractions();
-
             if (AFKDetector.ActivateOnStart.GetBool()) LateTask.New(() => aapc.Do(AFKDetector.RecordPosition), 1f, log: false);
 
             LateTask.New(() => Main.Instance.StartCoroutine(Utils.NotifyEveryoneAsync()), 3f, "NotifyEveryoneAsync On Game Start");
             LateTask.New(Utils.MarkEveryoneDirtySettings, 0.5f, "SyncAllSettings On Game Start");
             LateTask.New(() => Main.Instance.StartCoroutine(ShipStatusFixedUpdatePatch.Postfix()), 5f, "ShipStatusFixedUpdatePatch Postfix Start");
+
+            Utils.CheckAndSetVentInteractions();
         }
         else
         {
-            foreach (PlayerControl player in Main.EnumeratePlayerControls())
+            foreach (PlayerControl player in apc)
                 Main.PlayerStates[player.PlayerId].InitTask(player);
 
             switch (Options.CurrentGameMode)
@@ -1374,6 +1378,8 @@ internal static class IntroCutsceneDestroyPatch
         }
 
         Logger.Info("OnDestroy", "IntroCutscene");
+        
+        GameStates.InGame = true;
 
         LateTask.New(() =>
         {
@@ -1413,5 +1419,4 @@ internal static class IntroCutsceneDestroyPatch
                 PlayerControl.LocalPlayer.NetTransform.SnapTo(new(15.5f, 0.0f), (ushort)(PlayerControl.LocalPlayer.NetTransform.lastSequenceId + 8));
         }, 4f, "Airship Spawn FailSafe");
     }
-
 }

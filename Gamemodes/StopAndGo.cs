@@ -29,11 +29,12 @@ public class Counter(int totalGreenTime, int totalRedTime, char symbol, bool isR
             if (StopAndGo.IsEventActive && StopAndGo.Event.Type == StopAndGo.Events.HiddenTimers)
                 return "--";
 
-            bool hidden = IsYellow || (Timer == TotalGreenTime && !IsRed && !IsYellow) || (Timer == TotalRedTime && IsRed);
-            string result = hidden ? Utils.ColorString(Color.clear, "--") : Utils.ColorString(IsRed ? Color.red : Color.green, Timer < 10 ? $" {Timer}" : Timer.ToString());
+            int timer = Timer;
+            bool hidden = IsYellow || (timer == TotalGreenTime && !IsRed && !IsYellow) || (timer == TotalRedTime && IsRed);
+            string result = hidden ? Utils.ColorString(Color.clear, "--") : Utils.ColorString(IsRed ? Color.red : Color.green, timer < 10 ? $" {timer}" : timer.ToString());
 
-            if (Timer is <= 19 and >= 10 && !hidden) result = $" {result}";
-            if (Timer % 10 == 1 && !hidden) result = result.Insert(result.Length - 9, " ");
+            if (timer is <= 19 and >= 10 && !hidden) result = $" {result}";
+            if (timer % 10 == 1 && !hidden) result = result.Insert(result.Length - 9, " ");
 
             return result;
         }
@@ -82,7 +83,7 @@ internal class StopAndGoPlayerData(Counter[] counters, float positionX, float po
 
     public int Lives { get; private set; } = lives;
 
-    private Stopwatch LostLifeCooldownTimer { get; set; } = new();
+    private Stopwatch LostLifeCooldownTimer { get; set; } = Stopwatch.StartNew();
 
     public override string ToString()
     {
@@ -390,7 +391,7 @@ internal static class StopAndGo
             rank += Main.PlayerStates.Values.Where(x => x.TaskState.CompletedTasksCount == ms).ToList().IndexOf(state);
             return rank;
         }
-        catch { return Main.AllPlayerControls.Count; }
+        catch { return PlayerControl.AllPlayerControls.Count; }
     }
 
     public static string GetSuffixText(PlayerControl pc)

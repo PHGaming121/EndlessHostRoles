@@ -140,7 +140,7 @@ public class Witch : RoleBase
     {
         if (NowSwitchTrigger == SwitchTrigger.Vanish)
         {
-            var killRange = GameManager.Instance.LogicOptions.GetKillDistance();
+            var killRange = GameManager.Instance.LogicOptions.GetKillDistance() + 1f;
             if (!FastVector2.TryGetClosestPlayerInRangeTo(pc, killRange, out PlayerControl target, x => !x.IsImpostor())) return false;
             SetSpelled(pc, target);
         }
@@ -248,12 +248,10 @@ public class Witch : RoleBase
         return false;
     }
 
-    public static void OnCheckForEndVoting(PlayerState.DeathReason deathReason, params byte[] exileIds)
+    public static void OnCheckForEndVoting(params byte[] exileIds)
     {
         try
         {
-            if (deathReason != PlayerState.DeathReason.Vote) return;
-
             foreach (byte id in exileIds)
             {
                 if (PlayerIdList.Contains(id))

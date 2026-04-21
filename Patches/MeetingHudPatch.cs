@@ -19,6 +19,7 @@ internal static class CheckForEndVotingPatch
 {
     public static string EjectionText = string.Empty;
     public static NetworkedPlayerInfo TempExiledPlayer;
+    public static bool ShouldSkip;
 
     public static bool Prefix(MeetingHud __instance)
     {
@@ -27,7 +28,7 @@ internal static class CheckForEndVotingPatch
         if (Medic.PlayerIdList.Count > 0) Medic.OnCheckMark();
 
         // Meeting Skip with vote counting
-        bool shouldSkip = Input.GetKeyDown(KeyCode.F6);
+        ShouldSkip |= Input.GetKeyDown(KeyCode.F6);
 
         LogHandler voteLog = Logger.Handler("Vote");
 
@@ -106,7 +107,7 @@ internal static class CheckForEndVotingPatch
                 }
             }
 
-            if (!shouldSkip && !__instance.playerStates.All(ps =>
+            if (!ShouldSkip && !__instance.playerStates.All(ps =>
             {
                 if (!ps || Silencer.ForSilencer.Contains(ps.TargetPlayerId) || !Main.PlayerStates.TryGetValue(ps.TargetPlayerId, out PlayerState st) || st.IsDead || ps.AmDead || ps.DidVote) return true;
                 PlayerControl targetPlayer = Utils.GetPlayerById(ps.TargetPlayerId);
@@ -234,6 +235,7 @@ internal static class CheckForEndVotingPatch
 
             Commited.OnVotingResultsShown(statesList);
             Summoner.OnMeetingEnd();
+            QuizMaster.OnMeetingEnd();
 
             states = [.. statesList];
 
@@ -277,7 +279,7 @@ internal static class CheckForEndVotingPatch
             if (tie)
             {
                 var target = byte.MaxValue;
-                int playerNum = Main.AllPlayerControls.Count;
+                int playerNum = PlayerControl.AllPlayerControls.Count;
 
                 foreach (KeyValuePair<byte, int> data in votingData.Where(x => x.Key < playerNum && x.Value == max))
                 {
@@ -367,7 +369,7 @@ internal static class CheckForEndVotingPatch
 
         PlayerControl player = exiledPlayer.Object;
         CustomRoles crole = exiledPlayer.GetCustomRole();
-        string coloredRole = Utils.GetDisplayRoleName(exileId, true, true);
+        string coloredRole = Utils.GetDisplayRoleName(exileId, pure: true, seeTargetBetrayalAddons: true);
 
         if (crole == CustomRoles.LovingImpostor && !Options.ConfirmLoversOnEject.GetBool())
         {
@@ -562,11 +564,14 @@ internal static class CheckForEndVotingPatch
     {
         try
         {
-            if (Witch.PlayerIdList.Count > 0) Witch.OnCheckForEndVoting(deathReason, playerIds);
-            if (Virus.PlayerIdList.Count > 0) Virus.OnCheckForEndVoting(deathReason, playerIds);
-            if (deathReason == PlayerState.DeathReason.Vote) Gaslighter.OnExile(playerIds);
-            if (Wasp.On && deathReason == PlayerState.DeathReason.Vote) Wasp.OnExile(playerIds);
-            if (CustomRoles.SpellCaster.RoleExist() && deathReason == PlayerState.DeathReason.Vote) SpellCaster.OnExile(playerIds);
+            if (deathReason == PlayerState.DeathReason.Vote)
+            {
+                if (Witch.PlayerIdList.Count > 0) Witch.OnCheckForEndVoting(playerIds);
+                if (Virus.PlayerIdList.Count > 0) Virus.OnCheckForEndVoting(playerIds);
+                Gaslighter.OnExile(playerIds);
+                if (Wasp.On) Wasp.OnExile(playerIds);
+                if (CustomRoles.SpellCaster.RoleExist()) SpellCaster.OnExile(playerIds);
+            }
 
             foreach (byte playerId in playerIds)
             {
@@ -705,17 +710,19 @@ internal static class MeetingHudStartPatch
                 StringBuilder settings = new();
                 settings.Append("<size=70%>");
                 titleSb.Append($"{role.ToColoredString()} {Utils.GetRoleMode(role)}");
-                sb.Append("<size=90%>");
                 sb.Append(pc.GetRoleInfo(true).TrimStart());
-                if (Options.CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem opt)) Utils.ShowChildrenSettings(opt, ref settings, disableColor: false);
+                
+                if (Options.CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem opt))
+                    Utils.ShowChildrenSettings(opt, ref settings, disableColor: false);
 
                 settings.Append("</size>");
-                if (role.PetActivatedAbility()) sb.Append($"<size=50%>{GetString("SupportsPetMessage")}</size>");
+                
+                if (role.PetActivatedAbility())
+                    sb.Append($"<size=1>{GetString("SupportsPetMessage")}</size>");
 
                 string searchStr = GetString(role.ToString());
                 sb.Replace(searchStr, role.ToColoredString());
                 sb.Replace(searchStr.ToLower(), role.ToColoredString());
-                sb.Append("<size=70%>");
 
                 foreach (CustomRoles subRole in Main.PlayerStates[pc.PlayerId].SubRoles)
                 {
@@ -729,7 +736,7 @@ internal static class MeetingHudStartPatch
                 if (role.UsesPetInsteadOfKill()) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesPetInsteadOfKillNotice")));
                 if (pc.UsesMeetingShapeshift()) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
 
-                roleDescMsgs.Add(new(sb.Append("</size>").ToString(), pc.PlayerId, titleSb.ToString()));
+                roleDescMsgs.Add(new(sb.ToString(), pc.PlayerId, titleSb.ToString()));
             }
 
             LateTask.New(() =>
@@ -856,7 +863,7 @@ internal static class MeetingHudStartPatch
     {
         Logger.Info("------------Meeting Start------------", "Phase");
         GameStates.AlreadyDied |= !Utils.IsAllAlive;
-        Main.EnumeratePlayerControls().Do(x => ReportDeadBodyPatch.WaitReport[x.PlayerId].Clear());
+        ReportDeadBodyPatch.WaitReport.SetAllValues([]);
         MeetingStates.MeetingCalled = true;
         MeetingStates.MeetingNum++;
         CheckForEndVotingPatch.TempExiledPlayer = null;
@@ -1138,6 +1145,9 @@ internal static class MeetingHudStartPatch
             if (!seer.IsAlive() && Medic.InProtect(target.PlayerId) && !seer.Is(CustomRoles.Medic))
                 sb.Append(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Medic), " ●"));
 
+            if (seer.PlayerId == target.PlayerId && Main.PlayerStates[seer.PlayerId].Role is CovenBase { HasNecronomicon: true })
+                sb.Append($" <{Main.CovenColor}>♤</color>");
+
             sb.Append(Follower.TargetMark(seer, target));
             sb.Append(Romantic.TargetMark(seer, target));
             sb.Append(Lawyer.LawyerMark(seer, target));
@@ -1182,7 +1192,7 @@ internal static class MeetingHudUpdatePatch
     private static void ClearShootButton(MeetingHud __instance, bool forceAll = false)
     {
         __instance.playerStates.DoIf(
-            x => (forceAll || !Main.PlayerStates.TryGetValue(x.TargetPlayerId, out PlayerState ps) || ps.IsDead) && x.transform.FindChild("ShootButton") != null,
+            x => (forceAll || !Main.PlayerStates.TryGetValue(x.TargetPlayerId, out PlayerState ps) || ps.IsDead) && x.transform.FindChild("ShootButton"),
             x => Object.Destroy(x.transform.FindChild("ShootButton").gameObject));
     }
 
@@ -1219,7 +1229,7 @@ internal static class MeetingHudUpdatePatch
                 {
                     PlayerControl player = Utils.GetPlayerById(x.TargetPlayerId);
 
-                    if (player != null && player.IsAlive())
+                    if (player && player.IsAlive())
                     {
                         Main.PlayerStates[player.PlayerId].deathReason = PlayerState.DeathReason.Execution;
                         player.RpcExileV2();
@@ -1293,13 +1303,14 @@ internal static class MeetingHudOnDestroyPatch
 {
     public static void Postfix()
     {
-        if (!GameStates.InGame) return;
-        
-        MeetingStates.FirstMeeting = false;
         Logger.Info("------------End of meeting------------", "Phase");
 
+        MeetingStates.FirstMeeting = false;
         ReportDeadBodyPatch.MeetingStarted = false;
+        CheckForEndVotingPatch.ShouldSkip = false;
 
+        if (!GameStates.InGame) return;
+        
         if (AmongUsClient.Instance.AmHost)
         {
             GameEndChecker.ShouldNotCheck = true;

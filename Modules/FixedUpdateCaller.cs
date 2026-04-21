@@ -39,7 +39,7 @@ public static class FixedUpdateCaller
                 if (Options.EnableAutoMessage.GetBool() && now - LastAutoMessageSendTS > Options.AutoMessageSendInterval.GetInt())
                 {
                     LastAutoMessageSendTS = now;
-                    TemplateManager.SendTemplate("Notification", importance: MessageImportance.Low);
+                    TemplateManager.SendTemplate("Notification", noErr: true, importance: MessageImportance.Low);
                 }
             }
 
@@ -67,9 +67,9 @@ public static class FixedUpdateCaller
                             CustomGameMode.BedWars => BedWars.IsNotInLocalPlayersTeam,
                             CustomGameMode.CaptureTheFlag => CaptureTheFlag.IsNotInLocalPlayersTeam,
                             CustomGameMode.KingOfTheZones => KingOfTheZones.IsNotInLocalPlayersTeam,
-                            _ => _ => true
+                            _ => ExtendedPlayerControl.IsValidTargetForKillButton
                         }
-                        : _ => true;
+                        : ExtendedPlayerControl.IsValidTargetForKillButton;
 
                     PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(PlayerControl.LocalPlayer, GameManager.Instance.LogicOptions.GetKillDistance(), out PlayerControl closestPlayer, predicate) ? closestPlayer : null;
 

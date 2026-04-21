@@ -7,7 +7,6 @@ using EHR.Gamemodes;
 using EHR.Patches;
 using EHR.Roles;
 using HarmonyLib;
-using Hazel;
 using InnerNet;
 using TMPro;
 using UnityEngine;
@@ -112,7 +111,7 @@ public static class GameStartManagerPatch
                 AURoleOptions.SetOpt(Main.NormalOptions.CastFast<IGameOptions>());
                 if (AURoleOptions.ShapeshifterCooldown == 0f) AURoleOptions.ShapeshifterCooldown = Main.LastShapeshifterCooldown.Value;
 
-                AURoleOptions.GuardianAngelCooldown = Spiritcaller.SpiritAbilityCooldown.GetFloat();
+                //AURoleOptions.GuardianAngelCooldown = Spiritcaller.SpiritAbilityCooldown.GetFloat();
                 AURoleOptions.ProtectionDurationSeconds = 0f;
             }
             catch (Exception ex) { Logger.Error(ex.ToString(), "GameStartManagerStartPatch.Postfix (1)"); }
@@ -137,7 +136,7 @@ public static class GameStartManagerPatch
                 
                 if (!AmongUsClient.Instance) return false;
 
-                if (AmongUsClient.Instance.AmHost) VanillaUpdate(__instance);
+                VanillaUpdate(__instance);
 
                 if (AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !__instance || __instance.startState == GameStartManager.StartingStates.Starting) return false;
 
@@ -156,7 +155,7 @@ public static class GameStartManagerPatch
                     }
                 }
 
-                if (!AmongUsClient.Instance || !GameData.Instance || !AmongUsClient.Instance.AmHost) return true;
+                if (!AmongUsClient.Instance || !GameData.Instance) return true;
 
                 CheckAutoStart(__instance);
             }
@@ -208,10 +207,10 @@ public static class GameStartManagerPatch
             if (Options.RandomMapsMode.GetBool())
             {
                 Main.NormalOptions.MapId = GameStartRandomMap.SelectRandomMap();
-                CreateOptionsPickerPatch.SetDleks = Main.CurrentMap == MapNames.Dleks;
+                GameOptionsMapPickerPatch.SetDleks = Main.CurrentMap == MapNames.Dleks;
             }
-            else if (CreateOptionsPickerPatch.SetDleks) Main.NormalOptions.MapId = 3;
-            else if (CreateOptionsPickerPatch.SetSubmerged) Main.NormalOptions.MapId = 6;
+            else if (GameOptionsMapPickerPatch.SetDleks) Main.NormalOptions.MapId = 3;
+            else if (GameOptionsMapPickerPatch.SetSubmerged) Main.NormalOptions.MapId = 6;
 
             if (Options.OverrideSpeedForEachMap.GetBool() && Options.MapSpeeds.TryGetValue(Main.CurrentMap, out var option))
                 Main.NormalOptions.PlayerSpeedMod = option.GetFloat();
@@ -235,11 +234,14 @@ public static class GameStartManagerPatch
             GameStartManager.Instance.startState = GameStartManager.StartingStates.Countdown;
             GameStartManager.Instance.countDownTimer = Options.AutoStartTimer.GetInt();
             __instance?.StartButton.gameObject.SetActive(false);
+            
+            if (HudManager.InstanceExists)
+                HudManager.Instance.Dialogue.Hide();
         }
 
         private static void VanillaUpdate(GameStartManager instance)
         {
-            if (!GameData.Instance || !GameManager.Instance || !AmongUsClient.Instance.AmHost) return;
+            if (!GameData.Instance || !GameManager.Instance) return;
 
             try { instance.UpdateMapImage((MapNames)GameManager.Instance.LogicOptions.MapId); }
             catch (Exception e)
@@ -254,7 +256,7 @@ public static class GameStartManagerPatch
             }
 
             instance.CheckSettingsDiffs();
-            instance.StartButton.gameObject.SetActive(true);
+            instance.StartButton.gameObject.SetActive(AmongUsClient.Instance.AmHost);
             instance.RulesPresetText.text = TranslationController.Instance.GetString(GameOptionsManager.Instance.CurrentGameOptions.GetRulesPresetTitle());
 
             if (GameCode.IntToGameName(AmongUsClient.Instance.GameId) == null) instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.LocalButton);
@@ -320,13 +322,19 @@ public static class GameStartManagerPatch
                     instance.GameStartText.text = string.Empty;
                 }
             }
-            
+
             if (!HudManager.InstanceExists) return;
 
-            if (instance.LobbyInfoPane.gameObject.activeSelf && HudManager.Instance.Chat.IsOpenOrOpening)
-                instance.LobbyInfoPane.DeactivatePane();
+            if (instance.LobbyInfoPane.gameObject.activeSelf)
+            {
+                var lobbyViewSettingsPane = instance.LobbyInfoPane.LobbyViewSettingsPane;
+                lobbyViewSettingsPane.scrollBar.enabled = !HudManager.Instance.Chat.IsOpenOrOpening;
+            }
 
-            instance.LobbyInfoPane.gameObject.SetActive(!HudManager.Instance.Chat.IsOpenOrOpening);
+            //if (instance.LobbyInfoPane.gameObject.activeSelf && HudManager.Instance.Chat.IsOpenOrOpening)
+            //    instance.LobbyInfoPane.DeactivatePane();
+
+            //instance.LobbyInfoPane.gameObject.SetActive(!HudManager.Instance.Chat.IsOpenOrOpening);
         }
 
         public static void Postfix(GameStartManager __instance)
@@ -430,7 +438,7 @@ public static class GameStartManagerPatch
                     tmp.alignment = TextAlignmentOptions.Center;
                     tmp.color = Color.cyan;
                     tmp.outlineColor = Color.black;
-                    tmp.outlineWidth = 0.4f;
+                    tmp.outlineWidth = LangHasSensitiveOutlineText() ? 0.1f : 0.4f;
                     tmp.transform.localPosition += new Vector3(-0.625f, -0.12f, 0f);
                     tmp.transform.localScale = new(0.6f, 0.6f, 1f);
                 }
@@ -527,10 +535,10 @@ public static class GameStartRandomMap
         if (Options.RandomMapsMode.GetBool())
         {
             Main.NormalOptions.MapId = SelectRandomMap();
-            CreateOptionsPickerPatch.SetDleks = Main.CurrentMap == MapNames.Dleks;
+            GameOptionsMapPickerPatch.SetDleks = Main.CurrentMap == MapNames.Dleks;
         }
-        else if (CreateOptionsPickerPatch.SetDleks) Main.NormalOptions.MapId = 3;
-        else if (CreateOptionsPickerPatch.SetSubmerged) Main.NormalOptions.MapId = 6;
+        else if (GameOptionsMapPickerPatch.SetDleks) Main.NormalOptions.MapId = 3;
+        else if (GameOptionsMapPickerPatch.SetSubmerged) Main.NormalOptions.MapId = 6;
 
         if (Options.OverrideSpeedForEachMap.GetBool() && Options.MapSpeeds.TryGetValue(Main.CurrentMap, out var option))
             Main.NormalOptions.PlayerSpeedMod = option.GetFloat();
@@ -575,7 +583,7 @@ public static class GameStartRandomMap
             _ => 0
         });
         
-        int playerCount = Main.AllPlayerControls.Count;
+        int playerCount = PlayerControl.AllPlayerControls.Count;
         if (playerCount < Options.MinPlayersForAirship.GetInt()) chance.Remove(4);
         if (playerCount < Options.MinPlayersForFungle.GetInt()) chance.Remove(5);
         
@@ -605,6 +613,7 @@ internal static class UnrestrictedNumImpostorsPatch
 {
     public static bool Prefix(ref int __result)
     {
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) return true;
         __result = Main.NormalOptions.NumImpostors;
         return false;
     }

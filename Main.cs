@@ -30,7 +30,8 @@ namespace EHR;
 [BepInPlugin(PluginGuid, "EHR", PluginVersion)]
 [BepInIncompatibility("jp.ykundesu.supernewroles")]
 [BepInIncompatibility("MalumMenu")]
-[BepInIncompatibility("com.ten.thebetterroles")]
+[BepInIncompatibility("com.crewmod.oficial")]
+[BepInIncompatibility("com.crewmod.showcase")]
 [BepInIncompatibility("xyz.crowdedmods.crowdedmod")]
 [BepInDependency(SubmergedCompatibility.SubmergedGuid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInProcess("Among Us.exe")]
@@ -39,9 +40,9 @@ public class Main : BasePlugin
 {
     private const string DebugKeyHash = "c0fd562955ba56af3ae20d7ec9e64c664f0facecef4b3e366e109306adeae29d";
     private const string DebugKeySalt = "59687b";
-    private const string PluginGuid = "com.gurge44.endlesshostroles";
-    public const string PluginVersion = "7.3.0";
-    public const string PluginDisplayVersion = "7.3.0";
+    public const string PluginGuid = "com.gurge44.endlesshostroles";
+    public const string PluginVersion = "7.4.2";
+    public const string PluginDisplayVersion = "7.4.2";
     public const bool TestBuild = false;
 
     public const string NeutralColor = "#ffab1b";
@@ -56,9 +57,12 @@ public class Main : BasePlugin
     public const string ModColor = "#00ffff";
     public const bool AllowPublicRoom = true;
     public const string ForkId = "EHR";
-    public const string SupportedAUVersion = "2025.9.9";
+    public const string SupportedAUVersion = "2026.3.31";
 
-    public static readonly string DataPath = OperatingSystem.IsAndroid() ? Application.persistentDataPath : ".";
+    private static string StarData => Environment.GetEnvironmentVariable("STAR_DATA_PATH");    
+
+    public static readonly string DataPath =
+        OperatingSystem.IsAndroid() ? StarData : ".";
 
     public static readonly Version Version = Version.Parse(PluginVersion);
 
@@ -88,7 +92,6 @@ public class Main : BasePlugin
     public static readonly List<(CustomRoles, CustomRoles)> XORRoles = [];
     public static Dictionary<byte, string> LastAddOns = [];
     public static List<RoleBase> AllRoleClasses;
-    public static float RefixCooldownDelay;
     public static bool ProcessShapeshifts = true;
     public static readonly Dictionary<byte, (long StartTimeStamp, int TotalCooldown)> AbilityCD = [];
     public static Dictionary<byte, float> AbilityUseLimit = [];
@@ -111,6 +114,7 @@ public class Main : BasePlugin
     public static bool HasJustStarted;
     public static Dictionary<byte, bool> CheckShapeshift = [];
     public static Dictionary<byte, byte> ShapeshiftTarget = [];
+    public static Dictionary<byte, bool> ShapeshiftIsAnimated = [];
     public static bool VisibleTasksCount;
     public static string NickName = "";
     public static bool IntroDestroyed = true;
@@ -150,9 +154,8 @@ public class Main : BasePlugin
     public static Dictionary<byte, string> SleuthMsgs = [];
     public static Dictionary<byte, int> NumEmergencyMeetingsUsed = [];
     public static int MadmateNum;
-    public static uint LobbyBehaviourNetId;
-    
-    public static Stopwatch GameTimer = new();
+
+    public static readonly Stopwatch GameTimer = new();
     public static bool GameEndDueToTimer;
 
     public static bool ShowResult = true;
@@ -169,6 +172,8 @@ public class Main : BasePlugin
     // ReSharper disable once StringLiteralTypo
     private static readonly List<string> NameSnacksEn = ["Ice cream", "Milk tea", "Chocolate", "Cake", "Donut", "Coke", "Lemonade", "Candied haws", "Jelly", "Candy", "Milk", "Matcha", "Burning Grass Jelly", "Pineapple Bun", "Pudding", "Coconut Jelly", "Cookies", "Red Bean Toast", "Three Color Dumplings", "Wormwood Dumplings", "Puffs", "Can be Crepe", "Peach Crisp", "Mochi", "Egg Waffle", "Macaron", "Snow Plum Niang", "Fried Yogurt", "Egg Tart", "Muffin", "Sago Dew", "panna cotta", "soufflé", "croissant", "toffee"];
     private Coroutines coroutines;
+
+    public static bool HasReactorPlugin;
 
     private static HashAuth DebugKeyAuth { get; set; }
     private static ConfigEntry<string> DebugKeyInput { get; set; }
@@ -195,6 +200,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> DarkThemeForMeetingUI { get; private set; }
     public static ConfigEntry<bool> HorseMode { get; private set; }
     public static ConfigEntry<bool> LongMode { get; private set; }
+    public static ConfigEntry<bool> ClassicMode { get; private set; }
     public static ConfigEntry<bool> ShowPlayerInfoInLobby { get; private set; }
     public static ConfigEntry<bool> LobbyMusic { get; private set; }
     public static ConfigEntry<bool> EnableCommandHelper { get; private set; }
@@ -203,6 +209,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> ButtonCooldownInDecimalUnder10s { get; private set; }
     public static ConfigEntry<bool> CancelPetAnimation { get; private set; }
     public static ConfigEntry<bool> TryFixStuttering { get; private set; }
+    public static ConfigEntry<bool> ShowClientControlGUI { get; private set; }
     public static ConfigEntry<float> UIScaleFactor { get; private set; }
 
     // Preset Name Options
@@ -232,6 +239,7 @@ public class Main : BasePlugin
     public static ConfigEntry<string> BetaBuildUrl { get; private set; }
     public static ConfigEntry<float> LastKillCooldown { get; private set; }
     public static ConfigEntry<float> LastShapeshifterCooldown { get; private set; }
+    public static ConfigEntry<bool> AckdPrivacyPolicy { get; set; }
 
     public static IReadOnlyList<PlayerControl> AllPlayerControls => EnumeratePlayerControls().ToArray();
     public static IReadOnlyList<PlayerControl> AllAlivePlayerControls => EnumerateAlivePlayerControls().ToArray();
@@ -287,6 +295,7 @@ public class Main : BasePlugin
         DarkThemeForMeetingUI = Config.Bind("Client Options", "DarkThemeForMeetingUI", false);
         HorseMode = Config.Bind("Client Options", "HorseMode", false);
         LongMode = Config.Bind("Client Options", "LongMode", false);
+        ClassicMode = Config.Bind("Client Options", "ClassicMode", false);
         ShowPlayerInfoInLobby = Config.Bind("Client Options", "ShowPlayerInfoInLobby", false);
         LobbyMusic = Config.Bind("Client Options", "LobbyMusic", true);
         EnableCommandHelper = Config.Bind("Client Options", "EnableCommandHelper", true);
@@ -295,7 +304,13 @@ public class Main : BasePlugin
         ButtonCooldownInDecimalUnder10s = Config.Bind("Client Options", "ButtonCooldownInDecimalUnder10s", false);
         CancelPetAnimation = Config.Bind("Client Options", "CancelPetAnimation", true);
         TryFixStuttering = Config.Bind("Client Options", "TryFixStuttering", true);
+        ShowClientControlGUI = Config.Bind("Client Options", "ShowClientControlGUI", true);
         UIScaleFactor = Config.Bind("Client Options", "UIScaleFactor", 1f);
+
+        HasReactorPlugin = IL2CPPChainloader.Instance.Plugins.ContainsKey("gg.reactor.api");
+
+        AddComponent<ClientControlGUI>();
+        Log.LogInfo("ClientControlGUI registered");
 
         //Logger = BepInEx.Logging.Logger.CreateLogSource("EHR");
         coroutines = AddComponent<Coroutines>();
@@ -349,6 +364,7 @@ public class Main : BasePlugin
         MessageWait = Config.Bind("Other", "MessageWait", 0);
         LastKillCooldown = Config.Bind("Other", "LastKillCooldown", (float)30);
         LastShapeshifterCooldown = Config.Bind("Other", "LastShapeshifterCooldown", (float)30);
+        AckdPrivacyPolicy = Config.Bind("Other", "AckdPrivacyPolicy", false);
 
         HasArgumentException = false;
 
@@ -423,6 +439,7 @@ public class Main : BasePlugin
                 { CustomRoles.Vacuum, "#E44CD6" },
                 { CustomRoles.Carrier, "#5DE2E7" },
                 { CustomRoles.Transmitter, "#c9a11e" },
+                { CustomRoles.Tar, "#8C796B" },
                 { CustomRoles.Sensor, "#a3f7ff" },
                 { CustomRoles.Doorjammer, "#FFECA1" },
                 { CustomRoles.Captain, "#53B3EF" },
@@ -556,6 +573,7 @@ public class Main : BasePlugin
                 { CustomRoles.Thanos, "#F9D401" },
                 { CustomRoles.Berserker, "#50538F" },
                 { CustomRoles.SerialKiller, "#233fcc" },
+                { CustomRoles.Blockade, "#d6fa34" },
                 { CustomRoles.Quarry, "#c1fb2b" },
                 { CustomRoles.Accumulator, "#2bfbae" },
                 { CustomRoles.Spider, "#C9E44C" },
@@ -665,11 +683,15 @@ public class Main : BasePlugin
                 { CustomRoles.Listener, "#060270" },
                 { CustomRoles.Unbound, "#DFC57B" },
                 { CustomRoles.AntiTP, "#fcba03" },
+                { CustomRoles.Entombed, "#8c71de" },
+                { CustomRoles.Urgent, "#D49255" },
+                { CustomRoles.Talkative, "#6ADEDE" },
                 { CustomRoles.Blessed, "#7bfbff" },
                 { CustomRoles.Hidden, "#E2EAF4" },
                 { CustomRoles.Looter, "#F5D866" },
                 { CustomRoles.Tired, "#ff1919" },
                 { CustomRoles.Concealer, "#ff1919" },
+                { CustomRoles.Constricted, "#c561ec" },
                 { CustomRoles.Composter, "#8D6F64" },
                 { CustomRoles.TaskMaster, "#00ffa5" },
                 { CustomRoles.Compelled, "#D2E44C" },
@@ -681,6 +703,7 @@ public class Main : BasePlugin
                 { CustomRoles.Aide, "#ff1919" },
                 { CustomRoles.Anchor, "#6B4CE4" },
                 { CustomRoles.Fragile, "#debe66" },
+                { CustomRoles.Absorber, "#29f5a0" },
                 { CustomRoles.Allergic, "#e3bd56" },
                 { CustomRoles.Introvert, "#6293e3" },
                 { CustomRoles.Deadlined, "#ffa500" },
@@ -922,9 +945,13 @@ public class Main : BasePlugin
             try
             {
                 string json = File.ReadAllText(path);
-                if (string.IsNullOrWhiteSpace(json) || json == serialized || json.Length < serialized.Length) return;
-                var deserialized = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                RoleColors = deserialized.ToDictionary(x => Enum.Parse<CustomRoles>(x.Key), x => x.Value);
+                if (string.IsNullOrWhiteSpace(json) || json == serialized) return;
+
+                foreach ((string roleName, string hex) in JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? [])
+                {
+                    if (!Enum.TryParse(roleName, true, out CustomRoles role)) continue;
+                    RoleColors[role] = hex;
+                }
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
@@ -1066,6 +1093,7 @@ public enum CustomWinner
     Necromancer = CustomRoles.Necromancer,
     Wraith = CustomRoles.Wraith,
     SerialKiller = CustomRoles.SerialKiller,
+    Blockade = CustomRoles.Blockade,
     Quarry = CustomRoles.Quarry,
     Accumulator = CustomRoles.Accumulator,
     Spider = CustomRoles.Spider,
@@ -1213,5 +1241,3 @@ public enum TieMode
 }
 
 public class Coroutines : MonoBehaviour { }
-
-

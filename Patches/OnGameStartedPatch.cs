@@ -150,7 +150,7 @@ internal static class ChangeRoleSettings
 
         try
         {
-            if (Options.CurrentGameMode == CustomGameMode.BedWars)
+            if (Options.CurrentGameMode is CustomGameMode.BedWars or CustomGameMode.Snowdown)
                 Options.UsePets.SetValue(1);
         }
         catch (Exception e) { Utils.ThrowException(e); }
@@ -210,6 +210,7 @@ internal static class ChangeRoleSettings
             Main.ClientIdList = [];
             Main.CheckShapeshift = [];
             Main.ShapeshiftTarget = [];
+            Main.ShapeshiftIsAnimated = [];
             Main.LoversPlayers = [];
             Main.DiedThisRound = [];
             Main.GuesserGuessed = [];
@@ -255,17 +256,20 @@ internal static class ChangeRoleSettings
             Introvert.TeleportAwayDelays = [];
             Onbound.NumBlocked = [];
             Blessed.ShieldActive = [];
+            Talkative.NumMessagesThisMeeting = [];
+            Entombed.BlockedRoom = [];
 
             try
             {
-                SabotageMapPatch.TimerTexts.Values.DoIf(x => x != null, x => Object.Destroy(x.gameObject));
-                MapRoomDoorsUpdatePatch.DoorTimerTexts.Values.DoIf(x => x != null, x => Object.Destroy(x.gameObject));
+                SabotageMapPatch.TimerTexts.Values.DoIf(x => x, x => Object.Destroy(x.gameObject));
+                MapRoomDoorsUpdatePatch.DoorTimerTexts.Values.DoIf(x => x, x => Object.Destroy(x.gameObject));
             }
             catch (Exception e) { Utils.ThrowException(e); }
             
             SabotageMapPatch.TimerTexts = [];
             MapRoomDoorsUpdatePatch.DoorTimerTexts = [];
             ReportDeadBodyPatch.CanReport = [];
+            ReportDeadBodyPatch.AlreadyReportedBodies = [];
             
             GuessManager.Guessers = [];
             ChatCommands.VotedToStart = [];
@@ -278,11 +282,14 @@ internal static class ChangeRoleSettings
             ChatCommands.LastSpectators.UnionWith(ChatCommands.Spectators);
 
             RPCHandlerPatch.RemoveExpiredWhiteList();
+            
+            LobbyViewSettingsPanePatch.ClearReferences();
 
             try
             {
                 (OptionItem MinSetting, OptionItem MaxSetting) impLimits = Options.FactionMinMaxSettings[Team.Impostor];
                 int optImpNum = IRandom.Instance.Next(impLimits.MinSetting.GetInt(), impLimits.MaxSetting.GetInt() + 1);
+                if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) optImpNum = Math.Clamp(optImpNum, 1, 3);
                 GameOptionsManager.Instance.currentNormalGameOptions.NumImpostors = optImpNum;
                 GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumImpostors, optImpNum);
             }
@@ -313,6 +320,7 @@ internal static class ChangeRoleSettings
             Main.DefaultImpostorVision = Main.RealOptionsData.GetFloat(FloatOptionNames.ImpostorLightMod);
 
             Main.LastNotifyNames = [];
+            Main.NumEmergencyMeetingsUsed = [];
 
             CheckForEndVotingPatch.EjectionText = string.Empty;
 
@@ -325,41 +333,22 @@ internal static class ChangeRoleSettings
 
             Camouflage.BlockCamouflage = false;
             Camouflage.Init();
-
-            Main.NumEmergencyMeetingsUsed = Main.EnumeratePlayerControls().ToDictionary(x => x.PlayerId, _ => 0);
-
-            if (AmongUsClient.Instance.AmHost)
-            {
-                string[] invalidColor = Main.EnumeratePlayerControls().Where(p => p.Data.DefaultOutfit.ColorId < 0 || Palette.PlayerColors.Length <= p.Data.DefaultOutfit.ColorId).Select(p => $"{p.name}").ToArray();
-
-                if (invalidColor.Length > 0)
-                {
-                    string msg = GetString("Error.InvalidColor");
-                    Logger.SendInGame(msg, Color.yellow);
-                    msg += "\n" + string.Join(",", invalidColor);
-                    Utils.SendMessage(msg, importance: MessageImportance.Low);
-                    Logger.Error(msg, "CoStartGame");
-                }
-            }
-
+            
             RoleResult = [];
-
-            foreach (PlayerControl target in Main.EnumeratePlayerControls())
-            {
-                foreach (PlayerControl seer in Main.EnumeratePlayerControls())
-                {
-                    (byte, byte) pair = (target.PlayerId, seer.PlayerId);
-                    Main.LastNotifyNames[pair] = target.name;
-                }
-            }
 
             foreach (PlayerControl pc in Main.EnumeratePlayerControls())
             {
+                foreach (PlayerControl seer in Main.EnumeratePlayerControls())
+                {
+                    (byte, byte) pair = (pc.PlayerId, seer.PlayerId);
+                    Main.LastNotifyNames[pair] = pc.name;
+                }
+                
                 int colorId = pc.Data.DefaultOutfit.ColorId;
                 if (AmongUsClient.Instance.AmHost && Options.FormatNameMode.GetInt() == 1)
                 {
                     string colorName = Palette.GetColorName(colorId);
-                    string formattedColorName = char.ToUpper(colorName[0]) + colorName.Substring(1).ToLower();
+                    string formattedColorName = char.ToUpper(colorName[0]) + colorName[1..].ToLower();
                     pc.RpcSetName(formattedColorName);
                 }
 
@@ -372,6 +361,7 @@ internal static class ChangeRoleSettings
                     MapNames.Fungle => Options.ExtraKillCooldownOnFungle.GetFloat(),
                     _ => 0f
                 };
+                Main.NumEmergencyMeetingsUsed[pc.PlayerId] = 0;
                 ReportDeadBodyPatch.CanReport[pc.PlayerId] = true;
                 ReportDeadBodyPatch.WaitReport[pc.PlayerId] = [];
                 RoleResult[pc.PlayerId] = CustomRoles.NotAssigned;
@@ -390,7 +380,6 @@ internal static class ChangeRoleSettings
             if (__instance.AmHost)
             {
                 RPC.SyncCustomSettingsRPC();
-                Main.RefixCooldownDelay = 0;
             }
 
             FallFromLadder.Reset();
@@ -446,6 +435,9 @@ internal static class ChangeRoleSettings
             GameStates.AlreadyDied = false;
 
             Main.Instance.StartCoroutine(PopulateSkinItems());
+            
+            GC.Collect();
+            Resources.UnloadUnusedAssets();
         }
         catch (Exception ex)
         {
@@ -565,17 +557,7 @@ internal static class StartGameHostPatch
 
         if (LobbyBehaviour.Instance)
         {
-            Main.LobbyBehaviourNetId = LobbyBehaviour.Instance.NetId;
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
-            writer.StartMessage(5);
-            writer.Write(AUClient.GameId);
-            writer.StartMessage(5);
-            writer.WritePacked(LobbyBehaviour.Instance.NetId);
-            writer.EndMessage();
-            writer.EndMessage();
-            AUClient.SendOrDisconnect(writer);
-            writer.Recycle();
-            writer = MessageWriter.Get(SendOption.Reliable);
             writer.StartMessage(5);
             writer.Write(AUClient.GameId);
             writer.StartMessage(5);
@@ -590,7 +572,6 @@ internal static class StartGameHostPatch
         else
         {
             Logger.Fatal($"LobbyBehaviour.Instance is null in {nameof(StartGameHostPatch)}.{nameof(StartGameHost)}", "StartGameHost");
-            Main.LobbyBehaviourNetId = uint.MaxValue;
         }
 
         if (!ShipStatus.Instance)
@@ -952,7 +933,7 @@ internal static class StartGameHostPatch
             foreach (PlayerState state in Main.PlayerStates.Values)
             {
                 if (Main.NeverSpawnTogetherCombos.TryGetValue(OptionItem.CurrentPreset, out Dictionary<CustomRoles, List<CustomRoles>> neverList) && neverList.TryGetValue(state.MainRole, out List<CustomRoles> bannedAddonList))
-                    bannedAddonList.ForEach(x => state.RemoveSubRole(x));
+                    bannedAddonList.ForEach(state.RemoveSubRole);
 
                 if (Main.AlwaysSpawnTogetherCombos.TryGetValue(OptionItem.CurrentPreset, out Dictionary<CustomRoles, List<CustomRoles>> alwaysList) && alwaysList.TryGetValue(state.MainRole, out List<CustomRoles> addonList))
                     addonList.ForEach(x => state.SetSubRole(x));
@@ -1157,13 +1138,14 @@ internal static class StartGameHostPatch
 
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
-            if (pc.Data == null)
-                while (pc.Data == null)
+            if (!pc.Data)
+                while (!pc.Data)
                     yield return null;
 
             pc.Data.Disconnected = true;
-            pc.Data.SendGameData();
         }
+        
+        Utils.SendGameData();
 
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
 
@@ -1179,12 +1161,13 @@ internal static class StartGameHostPatch
 
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
-            if (pc == null || pc.Data == null) continue;
+            if (!pc || !pc.Data) continue;
 
             bool disconnected = Main.PlayerStates.TryGetValue(pc.PlayerId, out var state) && state.IsDead && state.deathReason == PlayerState.DeathReason.Disconnected;
             pc.Data.Disconnected = disconnected;
-            if (!disconnected) pc.Data.SendGameData();
         }
+        
+        Utils.SendGameData();
     }
 
     private static bool IsBasisChangingPlayer(byte id, CustomRoles role)
@@ -1277,7 +1260,7 @@ internal static class StartGameHostPatch
     {
         try
         {
-            if (target == null) return;
+            if (!target) return;
 
             int targetClientId = target.OwnerId;
             if (targetClientId == -1) return;

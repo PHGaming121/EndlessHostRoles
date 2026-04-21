@@ -7,6 +7,7 @@ using Hazel;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using InnerNet;
 using UnityEngine;
+using static EHR.GameStates;
 
 namespace EHR.Modules;
 
@@ -18,13 +19,14 @@ public abstract class GameOptionsSender
 
     private Il2CppStructArray<byte> BuildOptionArray()
     {
-        IGameOptions opt = BuildGameOptions();
+        IGameOptions opt = BuildSendableGameOptions();
+        var currentGameMode = AprilFoolsMode.IsAprilFoolsModeToggledOn ? opt.AprilFoolsOnMode : opt.GameMode;
 
         // option => byte[]
         MessageWriter writer = MessageWriter.Get();
         writer.Write(opt.Version);
         writer.StartMessage(0);
-        writer.Write((byte)opt.GameMode);
+        writer.Write((byte)currentGameMode);
 
         if (opt.TryCast(out NormalGameOptionsV10 normalOpt))
             NormalGameOptionsV10.Serialize(writer, normalOpt);
@@ -108,6 +110,59 @@ public abstract class GameOptionsSender
 
     public abstract IGameOptions BuildGameOptions();
 
+    protected IGameOptions BuildSendableGameOptions()
+    {
+        return SanitizeForOfficialServer(BuildGameOptions());
+    }
+
+    protected static IGameOptions SanitizeForOfficialServer(IGameOptions opt)
+    {
+        if (CurrentServerType != ServerType.Vanilla || opt == null || !opt.TryCast(out NormalGameOptionsV10 normalOpt))
+            return opt;
+
+        int originalMaxPlayers = normalOpt.MaxPlayers;
+        int originalImpostors = normalOpt.NumImpostors;
+        int originalKillDistance = normalOpt.KillDistance;
+        float originalPlayerSpeed = normalOpt.PlayerSpeedMod;
+        bool changed = false;
+
+        if (normalOpt.MaxPlayers > 15)
+        {
+            normalOpt.SetInt(Int32OptionNames.MaxPlayers, 15);
+            changed = true;
+        }
+
+        int impostors = Mathf.Clamp(normalOpt.NumImpostors, 1, 3);
+        if (impostors != normalOpt.NumImpostors)
+        {
+            normalOpt.SetInt(Int32OptionNames.NumImpostors, impostors);
+            changed = true;
+        }
+
+        int killDistance = Mathf.Clamp(normalOpt.KillDistance, 0, 2);
+        if (killDistance != normalOpt.KillDistance)
+        {
+            normalOpt.SetInt(Int32OptionNames.KillDistance, killDistance);
+            changed = true;
+        }
+
+        float playerSpeed = Mathf.Clamp(normalOpt.PlayerSpeedMod, Main.MinSpeed, 3f);
+        if (!Mathf.Approximately(playerSpeed, normalOpt.PlayerSpeedMod))
+        {
+            normalOpt.SetFloat(FloatOptionNames.PlayerSpeedMod, playerSpeed);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            Logger.Warn(
+                $"Clamped outgoing official game options: MaxPlayers={originalMaxPlayers}->{normalOpt.MaxPlayers}, NumImpostors={originalImpostors}->{normalOpt.NumImpostors}, KillDistance={originalKillDistance}->{normalOpt.KillDistance}, PlayerSpeedMod={originalPlayerSpeed:0.###}->{normalOpt.PlayerSpeedMod:0.###}",
+                nameof(GameOptionsSender));
+        }
+
+        return normalOpt.CastFast<IGameOptions>();
+    }
+
     protected virtual bool AmValid()
     {
         return true;
@@ -166,7 +221,7 @@ public abstract class GameOptionsSender
 
     public static Coroutine ActiveCoroutine;
     private static readonly Stopwatch Stopwatch = new();
-    private const int FrameBudget = 4; // in milliseconds
+    private const int FrameBudget = 3; // in milliseconds
     protected static bool ForceWaitFrame;
 
     #endregion

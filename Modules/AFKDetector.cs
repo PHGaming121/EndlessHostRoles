@@ -42,7 +42,7 @@ public static class AFKDetector
 
     public static void RecordPosition(PlayerControl pc)
     {
-        if (!EnableDetector.GetBool() || !GameStates.IsInTask || pc == null || ExemptedPlayers.Contains(pc.PlayerId) || Options.CurrentGameMode is CustomGameMode.SoloPVP or CustomGameMode.FFA or CustomGameMode.HotPotato or CustomGameMode.Speedrun or CustomGameMode.RoomRush or CustomGameMode.Quiz or CustomGameMode.Deathrace) return;
+        if (!EnableDetector.GetBool() || !GameStates.IsInTask || !pc || ExemptedPlayers.Contains(pc.PlayerId) || Options.CurrentGameMode is CustomGameMode.SoloPVP or CustomGameMode.FFA or CustomGameMode.HotPotato or CustomGameMode.Speedrun or CustomGameMode.RoomRush or CustomGameMode.Quiz or CustomGameMode.Deathrace) return;
 
         var waitingTime = 10f;
         if (!pc.IsAlive()) waitingTime += 5f;
@@ -113,10 +113,8 @@ public static class AFKDetector
             if (ExtendedPlayerControl.BlackScreenWaitingPlayers.Contains(id))
                 ExtendedPlayerControl.CancelBlackScreenFix.Add(id);
 
-            PlayerData.Remove(id);
-            ShieldedPlayers.Remove(id);
-
-            Utils.NotifyRoles(SpecifyTarget: id.GetPlayer());
+            if (PlayerData.Remove(id) | ShieldedPlayers.Remove(id))
+                Utils.NotifyRoles(SpecifyTarget: id.GetPlayer());
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
